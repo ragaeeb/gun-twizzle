@@ -1,0 +1,9 @@
+{
+    "clipBased": true,
+    "clipMap": {
+        "Idle": { "clip": "RIG_UE5_Comando_AK_Idle", "loop": true },
+        "Reload": { "clip": "RIG_UE5_Comando_AK_Reload", "loop": false },
+        "Shoot": { "clip": "RIG_UE5_Comando_AK_Fire", "loop": false },
+        "Switch": { "clip": "RIG_UE5_Comando_AK_Equip", "loop": false }
+    }
+}

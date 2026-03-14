@@ -1,0 +1,72 @@
+{
+    "$schema": "https://biomejs.dev/schemas/latest/schema.json",
+    "assist": {
+        "actions": {
+            "source": {
+                "organizeImports": "on",
+                "useSortedKeys": {
+                    "level": "on",
+                    "options": { "sortOrder": "natural" }
+                }
+            }
+        }
+    },
+
+    "files": {
+        "ignoreUnknown": true,
+        "includes": ["**", "!node_modules", "!dist", "!build", "!coverage", "!output"]
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 120
+    },
+    "javascript": {
+        "formatter": {
+            "arrowParentheses": "always",
+            "bracketSameLine": false,
+            "bracketSpacing": true,
+            "quoteStyle": "single",
+            "semicolons": "always",
+            "trailingCommas": "all"
+        }
+    },
+    "linter": {
+        "domains": {
+            "project": "recommended"
+        },
+        "enabled": true,
+        "rules": {
+            "complexity": {
+                "noExcessiveCognitiveComplexity": "warn",
+                "useArrowFunction": "warn",
+                "useWhile": "error"
+            },
+            "recommended": true,
+            "style": {
+                "noNonNullAssertion": "off",
+                "useBlockStatements": {
+                    "fix": "safe",
+                    "level": "error",
+                    "options": {}
+                },
+                "useConsistentTypeDefinitions": {
+                    "fix": "none",
+                    "level": "warn",
+                    "options": {
+                        "style": "type"
+                    }
+                }
+            },
+            "suspicious": {
+                "noExplicitAny": "warn"
+            }
+        }
+    },
+    "vcs": {
+        "clientKind": "git",
+        "enabled": true,
+        "useIgnoreFile": true
+    }
+}

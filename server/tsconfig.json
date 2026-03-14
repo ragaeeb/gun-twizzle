@@ -1,0 +1,23 @@
+{
+    "compilerOptions": {
+        "baseUrl": "..",
+        "isolatedModules": true,
+        "lib": ["ESNext"],
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "noEmit": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitReturns": true,
+        "noUncheckedIndexedAccess": true,
+        "paths": {
+            "@/*": ["src/*"]
+        },
+        "resolveJsonModule": true,
+        "skipLibCheck": true,
+        "strict": true,
+        "target": "ESNext",
+        "types": ["bun-types"],
+        "useDefineForClassFields": true
+    },
+    "include": [".", "../src/sim", "../src/content", "../src/net/protocol.ts"]
+}

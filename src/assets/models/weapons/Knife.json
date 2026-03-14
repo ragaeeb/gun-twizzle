@@ -1,0 +1,39 @@
+{
+    "markers": [
+        {
+            "frame": 0,
+            "name": "Idle_Start",
+            "time": 0.0
+        },
+        {
+            "frame": 38,
+            "name": "Idle_End",
+            "time": 1.267
+        },
+        {
+            "frame": 81,
+            "name": "Shoot_Start",
+            "time": 2.7
+        },
+        {
+            "frame": 100,
+            "name": "Shoot_End",
+            "time": 3.333
+        },
+        {
+            "frame": 84,
+            "name": "Sound_knife",
+            "time": 2.8
+        },
+        {
+            "frame": 121,
+            "name": "Switch_Start",
+            "time": 4.033
+        },
+        {
+            "frame": 135,
+            "name": "Switch_End",
+            "time": 4.5
+        }
+    ]
+}
