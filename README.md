@@ -2,6 +2,7 @@
 
 ![Gun Twizzle icon](./icon.png)
 
+[![Netlify Status](https://api.netlify.com/api/v1/badges/c6e5ebef-554d-4b46-a93f-48c5be3f20da/deploy-status)](https://app.netlify.com/projects/gun-twizzle/deploys)
 ![Bun](https://img.shields.io/badge/bun-1.3.10-14151A?logo=bun&logoColor=white)
 ![Vite](https://img.shields.io/badge/vite-8.x-646CFF?logo=vite&logoColor=white)
 ![React](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=black)
