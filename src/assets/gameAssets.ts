@@ -45,6 +45,8 @@ type ClipMapEntryResolved = {
     loop: boolean;
 };
 
+const noop = () => {};
+
 function cloneScene<T extends THREE.Object3D & { animations?: THREE.AnimationClip[] }>(scene: T): T {
     const clonedScene = cloneSkeleton(scene) as T;
     clonedScene.animations = scene.animations;
@@ -291,7 +293,7 @@ class AudioManagerClass {
                 sound.disconnect();
             };
         } else {
-            sound.onEnded = null;
+            sound.onEnded = noop;
         }
 
         return sound;
@@ -346,7 +348,7 @@ class AudioManagerClass {
             return null;
         }
         AudioManagerClass.activePositionalSources.delete(sound);
-        sound.onEnded = null;
+        sound.onEnded = noop;
         sound.setBuffer(buffer);
         sound.setRefDistance(refDistance);
         sound.setRolloffFactor(rolloffFactor);

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
+import type { CharacterControllerHandle } from '../../physics/characterController';
 import type { FpsCamera } from '../../render/scene';
 import type { PhysicsSystem } from '../physics';
 import { PlayerController } from '../player';
@@ -8,25 +9,26 @@ import type { InputState } from '../types';
 import { WeaponId } from '../types';
 import { WeaponRegistry } from '../weapons';
 
-type RigidBodyStub = {
-    translation: () => { x: number; y: number; z: number };
-    setTranslation: (pos: { x: number; y: number; z: number }, wake: boolean) => void;
-};
-
 type PhysicsStub = Pick<
     PhysicsSystem,
     'canPlayerStandUp' | 'createKinematicPlayer' | 'moveKinematicPlayer' | 'raycastWithNormal' | 'resizePlayerCapsule'
 >;
 
 const createPhysicsStub = (): PhysicsStub => {
-    const rigidBody: RigidBodyStub = {
+    const rigidBody = {
         setTranslation: () => {},
         translation: () => ({ x: 0, y: 1, z: 0 }),
+    } as unknown as CharacterControllerHandle['rigidBody'];
+
+    const handle: CharacterControllerHandle = {
+        collider: {} as CharacterControllerHandle['collider'],
+        controller: {} as CharacterControllerHandle['controller'],
+        rigidBody,
     };
 
     return {
         canPlayerStandUp: () => true,
-        createKinematicPlayer: () => ({ rigidBody }),
+        createKinematicPlayer: () => handle,
         moveKinematicPlayer: () => true,
         raycastWithNormal: () => null,
         resizePlayerCapsule: () => {},
