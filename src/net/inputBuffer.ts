@@ -25,6 +25,22 @@ export type InputBuffer = {
     push: (entry: BufferedInput) => void;
 };
 
+const cloneBufferedInput = (entry: BufferedInput): BufferedInput => {
+    if (typeof structuredClone === 'function') {
+        return structuredClone(entry);
+    }
+
+    return {
+        input: {
+            ...entry.input,
+            cameraPosition: entry.input.cameraPosition ? [...entry.input.cameraPosition] : null,
+            lookRotation: [...entry.input.lookRotation],
+        },
+        position: [...entry.position],
+        seq: entry.seq,
+    };
+};
+
 export const createInputBuffer = (capacity = DEFAULT_CAPACITY): InputBuffer => {
     let entries: BufferedInput[] = [];
 
@@ -35,10 +51,10 @@ export const createInputBuffer = (capacity = DEFAULT_CAPACITY): InputBuffer => {
 
         count: () => entries.length,
 
-        getUnacked: () => [...entries],
+        getUnacked: () => entries.map((entry) => cloneBufferedInput(entry)),
 
         push: (entry: BufferedInput) => {
-            entries.push(entry);
+            entries.push(cloneBufferedInput(entry));
             if (entries.length > capacity) {
                 entries.shift();
             }

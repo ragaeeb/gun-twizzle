@@ -15,6 +15,12 @@ describe('SimClock', () => {
         expect(clock.dt).toBeCloseTo(1 / 30);
     });
 
+    it('rejects invalid hz values', () => {
+        expect(() => createClock(0)).toThrow(RangeError);
+        expect(() => createClock(-1)).toThrow(RangeError);
+        expect(() => createClock(Number.NaN)).toThrow(RangeError);
+    });
+
     it('returns 1 step for exactly one dt', () => {
         const clock = createClock(60);
         const steps = tickClock(clock, clock.dt);
@@ -48,11 +54,13 @@ describe('SimClock', () => {
         expect(steps).toBe(5);
     });
 
-    it('preserves accumulator remainder after capping', () => {
+    it('preserves pre-existing remainder when delta is capped', () => {
         const clock = createClock(60);
-        tickClock(clock, 1.0);
-        // After 5 steps, there should be no significant remainder since delta was capped
-        expect(clock.accumulator).toBeLessThan(clock.dt);
+        const preloadSteps = tickClock(clock, clock.dt * 0.75);
+        expect(preloadSteps).toBe(0);
+        const steps = tickClock(clock, 1.0);
+        expect(steps).toBe(5);
+        expect(clock.accumulator).toBeCloseTo(clock.dt * 0.75, 10);
     });
 
     it('simTime advances correctly over multiple ticks', () => {
@@ -75,5 +83,17 @@ describe('SimClock', () => {
         tickClock(clock, clock.dt);
         const alpha = getAlpha(clock);
         expect(alpha).toBeCloseTo(0, 5);
+    });
+
+    it('rejects invalid frame deltas', () => {
+        const clock = createClock(60);
+        expect(() => tickClock(clock, -0.1)).toThrow(RangeError);
+        expect(() => tickClock(clock, Number.NaN)).toThrow(RangeError);
+    });
+
+    it('rejects mutated clock dt', () => {
+        const clock = createClock(60);
+        clock.dt = 0;
+        expect(() => tickClock(clock, 0.016)).toThrow(RangeError);
     });
 });

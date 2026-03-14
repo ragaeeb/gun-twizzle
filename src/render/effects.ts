@@ -1,14 +1,35 @@
-// @ts-nocheck
 import * as THREE from 'three';
 import { AssetManager } from '../assets/gameAssets';
 import { AssetRegistry } from '../assets/registry';
 
-function createRadialImpactTexture() {
+type BillboardParticle = {
+    duration: number;
+    initialOpacity: number;
+    position: THREE.Vector3;
+    rotation: number;
+    scale: number;
+    startTime: number;
+    velocity: THREE.Vector3;
+};
+
+type BulletCasingParticle = {
+    duration: number;
+    position: THREE.Vector3;
+    rotation: THREE.Vector3;
+    scale: number;
+    startTime: number;
+    velocity: THREE.Vector3;
+};
+
+function createRadialImpactTexture(): THREE.Texture {
     const canvas = document.createElement('canvas');
     canvas.width = 64;
     canvas.height = 64;
 
     const context = canvas.getContext('2d');
+    if (!context) {
+        return createFallbackTexture();
+    }
     const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
     gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
     gradient.addColorStop(0.7, 'rgba(40, 40, 40, 0.8)');
@@ -19,12 +40,19 @@ function createRadialImpactTexture() {
     return new THREE.CanvasTexture(canvas);
 }
 
-function createFallbackTexture() {
+function createFallbackTexture(): THREE.Texture {
     return AssetManager.createFallbackTexture();
 }
 
 export class BulletHoleSystem {
-    constructor(scene, maxDecals = 50) {
+    private scene: THREE.Scene;
+    private maxDecals: number;
+    private texture: THREE.Texture | null;
+    private instancedMesh: THREE.InstancedMesh | null;
+    private nextIndex: number;
+    private dummy: THREE.Object3D;
+
+    constructor(scene: THREE.Scene, maxDecals = 50) {
         this.scene = scene;
         this.maxDecals = maxDecals;
         this.texture = null;
@@ -32,7 +60,13 @@ export class BulletHoleSystem {
         this.nextIndex = 0;
         this.dummy = new THREE.Object3D();
 
-        this.loadTextures().then(() => {
+        void this.initialize();
+    }
+
+    private async initialize(): Promise<void> {
+        try {
+            await this.loadTextures();
+
             const geometry = new THREE.PlaneGeometry(0.15, 0.15);
 
             if (this.texture) {
@@ -58,10 +92,12 @@ export class BulletHoleSystem {
 
             this.initializeInstances();
             this.scene.add(this.instancedMesh);
-        });
+        } catch (error) {
+            console.error('BulletHoleSystem: Failed to initialize', error);
+        }
     }
 
-    async loadTextures() {
+    async loadTextures(): Promise<void> {
         const loader = new THREE.TextureLoader();
 
         try {
@@ -71,7 +107,7 @@ export class BulletHoleSystem {
         }
     }
 
-    initializeInstances() {
+    initializeInstances(): void {
         if (!this.instancedMesh) {
             return;
         }
@@ -85,7 +121,7 @@ export class BulletHoleSystem {
         this.instancedMesh.instanceMatrix.needsUpdate = true;
     }
 
-    addBulletHole(position, normal, scale = 1) {
+    addBulletHole(position: THREE.Vector3, normal: THREE.Vector3, scale = 1): void {
         if (!this.instancedMesh) {
             return;
         }
@@ -101,28 +137,52 @@ export class BulletHoleSystem {
         this.nextIndex = (this.nextIndex + 1) % this.maxDecals;
     }
 
-    clearAllBulletHoles() {
+    clearAllBulletHoles(): void {
         this.nextIndex = 0;
         this.initializeInstances();
     }
 
-    dispose() {
+    dispose(): void {
         if (this.instancedMesh) {
+            if (this.instancedMesh.parent) {
+                this.instancedMesh.parent.remove(this.instancedMesh);
+            }
             this.instancedMesh.geometry.dispose();
 
             if (this.instancedMesh.material instanceof THREE.Material) {
                 this.instancedMesh.material.dispose();
             }
+
+            this.instancedMesh = null;
         }
 
         if (this.texture) {
             this.texture.dispose();
+            this.texture = null;
         }
     }
 }
 
 export class BillboardParticleSystem {
-    constructor(parent, texture, maxParticles, blending) {
+    private maxParticles: number;
+    private particleCount: number;
+    private geometry: THREE.InstancedBufferGeometry;
+    private material: THREE.ShaderMaterial;
+    private mesh: THREE.Mesh;
+    private offsetAttribute: THREE.InstancedBufferAttribute;
+    private scaleAttribute: THREE.InstancedBufferAttribute;
+    private rotationAttribute: THREE.InstancedBufferAttribute;
+    private opacityAttribute: THREE.InstancedBufferAttribute;
+    private velocityAttribute: THREE.InstancedBufferAttribute;
+    private timeAttribute: THREE.InstancedBufferAttribute;
+    private durationAttribute: THREE.InstancedBufferAttribute;
+    private uniforms: {
+        uCurrentTime: THREE.IUniform<number>;
+        uTexture: THREE.IUniform<THREE.Texture>;
+        uViewMatrix: THREE.IUniform<THREE.Matrix4>;
+    };
+
+    constructor(parent: THREE.Object3D, texture: THREE.Texture, maxParticles: number, blending: THREE.Blending) {
         this.maxParticles = maxParticles;
         this.particleCount = 0;
 
@@ -149,6 +209,12 @@ export class BillboardParticleSystem {
         this.geometry.setAttribute('aTime', this.timeAttribute);
         this.geometry.setAttribute('aDuration', this.durationAttribute);
 
+        this.uniforms = {
+            uCurrentTime: { value: 0 },
+            uTexture: { value: texture },
+            uViewMatrix: { value: new THREE.Matrix4() },
+        };
+
         this.material = new THREE.ShaderMaterial({
             blending,
             depthWrite: false,
@@ -169,11 +235,7 @@ export class BillboardParticleSystem {
       `,
             side: THREE.DoubleSide,
             transparent: true,
-            uniforms: {
-                uCurrentTime: { value: 0 },
-                uTexture: { value: texture },
-                uViewMatrix: { value: new THREE.Matrix4() },
-            },
+            uniforms: this.uniforms,
             vertexShader: `
         attribute vec3 offset;
         attribute float aScale;
@@ -220,7 +282,7 @@ export class BillboardParticleSystem {
         parent.add(this.mesh);
     }
 
-    addParticle(particle) {
+    addParticle(particle: BillboardParticle): void {
         if (this.particleCount >= this.maxParticles) {
             return;
         }
@@ -246,13 +308,13 @@ export class BillboardParticleSystem {
         this.durationAttribute.needsUpdate = true;
     }
 
-    update(currentTime, camera) {
-        this.material.uniforms.uCurrentTime.value = currentTime;
-        this.material.uniforms.uViewMatrix.value.copy(camera.matrixWorldInverse);
+    update(currentTime: number, camera: THREE.Camera): void {
+        this.uniforms.uCurrentTime.value = currentTime;
+        this.uniforms.uViewMatrix.value.copy(camera.matrixWorldInverse);
         this.removeExpiredParticles(currentTime);
     }
 
-    removeExpiredParticles(currentTime) {
+    removeExpiredParticles(currentTime: number): void {
         let writeIndex = 0;
 
         for (let index = 0; index < this.particleCount; index += 1) {
@@ -298,7 +360,7 @@ export class BillboardParticleSystem {
         }
     }
 
-    dispose() {
+    dispose(): void {
         this.geometry.dispose();
         this.material.dispose();
 
@@ -306,10 +368,21 @@ export class BillboardParticleSystem {
             this.mesh.parent.remove(this.mesh);
         }
     }
+
+    get count(): number {
+        return this.particleCount;
+    }
 }
 
 export class ImpactParticleSystem {
-    constructor(parent) {
+    private parent: THREE.Object3D;
+    private smokeTexture: THREE.Texture | null;
+    private impactTexture: THREE.Texture | null;
+    private smokeSystem: BillboardParticleSystem | null;
+    private impactSystem: BillboardParticleSystem | null;
+    private currentTime: number;
+
+    constructor(parent: THREE.Object3D) {
         this.parent = parent;
         this.smokeTexture = null;
         this.impactTexture = null;
@@ -320,22 +393,21 @@ export class ImpactParticleSystem {
         this.loadTextures();
     }
 
-    async loadTextures() {
+    async loadTextures(): Promise<void> {
         const loader = new THREE.TextureLoader();
 
         try {
             this.smokeTexture = await loader.loadAsync(AssetRegistry.textures.smoke);
             this.impactTexture = await loader.loadAsync(AssetRegistry.textures.sparks);
         } catch {
-            const fallback = createFallbackTexture();
-            this.smokeTexture = fallback;
-            this.impactTexture = fallback;
+            this.smokeTexture = createFallbackTexture();
+            this.impactTexture = createFallbackTexture();
         }
 
         this.initializeParticleSystems();
     }
 
-    initializeParticleSystems() {
+    initializeParticleSystems(): void {
         if (!this.smokeTexture || !this.impactTexture) {
             return;
         }
@@ -344,12 +416,12 @@ export class ImpactParticleSystem {
         this.impactSystem = new BillboardParticleSystem(this.parent, this.impactTexture, 50, THREE.NormalBlending);
     }
 
-    createImpact(position, normal, scale = 1) {
+    createImpact(position: THREE.Vector3, normal: THREE.Vector3, scale = 1): void {
         this.createImpactSmoke(position, normal, scale);
         this.createImpactSparks(position, normal, scale);
     }
 
-    createImpactSmoke(position, normal, scale) {
+    createImpactSmoke(position: THREE.Vector3, normal: THREE.Vector3, scale: number): void {
         if (!this.smokeSystem) {
             return;
         }
@@ -381,7 +453,7 @@ export class ImpactParticleSystem {
         }
     }
 
-    createImpactSparks(position, normal, scale) {
+    createImpactSparks(position: THREE.Vector3, normal: THREE.Vector3, scale: number): void {
         if (!this.impactSystem) {
             return;
         }
@@ -412,7 +484,7 @@ export class ImpactParticleSystem {
         }
     }
 
-    update(delta, camera) {
+    update(delta: number, camera: THREE.Camera): void {
         this.currentTime += delta * 1000;
 
         if (this.smokeSystem) {
@@ -424,7 +496,7 @@ export class ImpactParticleSystem {
         }
     }
 
-    dispose() {
+    dispose(): void {
         if (this.smokeSystem) {
             this.smokeSystem.dispose();
         }
@@ -444,18 +516,29 @@ export class ImpactParticleSystem {
 }
 
 export class BulletCasingParticleSystem {
-    constructor(parent, maxParticles) {
+    private parent: THREE.Object3D;
+    private maxParticles: number;
+    private particleCount: number;
+    private particles: BulletCasingParticle[];
+    private dummy: THREE.Object3D;
+    private scratchPosition: THREE.Vector3;
+    private scratchVelocity: THREE.Vector3;
+    private instancedMesh: THREE.InstancedMesh | null;
+
+    constructor(parent: THREE.Object3D, maxParticles: number) {
         this.parent = parent;
         this.maxParticles = maxParticles;
         this.particleCount = 0;
         this.particles = [];
         this.dummy = new THREE.Object3D();
+        this.scratchPosition = new THREE.Vector3();
+        this.scratchVelocity = new THREE.Vector3();
         this.instancedMesh = null;
 
         this.initializeBulletMesh();
     }
 
-    async initializeBulletMesh() {
+    async initializeBulletMesh(): Promise<void> {
         try {
             const model = AssetManager.getModel(AssetRegistry.weapons.bullet.model);
             if (!model) {
@@ -468,10 +551,16 @@ export class BulletCasingParticleSystem {
             }
 
             const sourceMesh = meshes[0];
+            if (!sourceMesh) {
+                return;
+            }
             const geometry = sourceMesh.geometry.clone();
             const material = Array.isArray(sourceMesh.material)
-                ? sourceMesh.material[0].clone()
+                ? sourceMesh.material[0]?.clone()
                 : sourceMesh.material.clone();
+            if (!material) {
+                return;
+            }
 
             this.instancedMesh = new THREE.InstancedMesh(geometry, material, this.maxParticles);
             this.instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -488,7 +577,7 @@ export class BulletCasingParticleSystem {
         }
     }
 
-    addParticle(particle) {
+    addParticle(particle: BillboardParticle): void {
         if (!this.instancedMesh || this.particleCount >= this.maxParticles) {
             return;
         }
@@ -506,7 +595,7 @@ export class BulletCasingParticleSystem {
         this.instancedMesh.count = this.particleCount;
     }
 
-    update(currentTime) {
+    update(currentTime: number): void {
         if (!this.instancedMesh) {
             return;
         }
@@ -515,11 +604,16 @@ export class BulletCasingParticleSystem {
 
         for (let index = 0; index < this.particleCount; index += 1) {
             const particle = this.particles[index];
+            if (!particle) {
+                continue;
+            }
             const age = currentTime - particle.startTime;
 
             if (age < particle.duration) {
                 const seconds = age / 1000;
-                const position = particle.position.clone().add(particle.velocity.clone().multiplyScalar(age));
+                const position = this.scratchPosition
+                    .copy(particle.position)
+                    .add(this.scratchVelocity.copy(particle.velocity).multiplyScalar(age));
 
                 position.y -= 4.905 * seconds * seconds * 0.001;
 
@@ -542,7 +636,7 @@ export class BulletCasingParticleSystem {
         this.instancedMesh.instanceMatrix.needsUpdate = true;
     }
 
-    dispose() {
+    dispose(): void {
         if (this.instancedMesh) {
             this.instancedMesh.geometry.dispose();
 
@@ -562,13 +656,21 @@ export class BulletCasingParticleSystem {
         this.particles = [];
     }
 
-    get count() {
+    get count(): number {
         return this.particleCount;
     }
 }
 
 export class ShootParticleSystem {
-    constructor(parent) {
+    private parent: THREE.Object3D;
+    private muzzleFlashTexture: THREE.Texture | null;
+    private smokeTexture: THREE.Texture | null;
+    private muzzleFlashSystem: BillboardParticleSystem | null;
+    private smokeSystem: BillboardParticleSystem | null;
+    private bulletSystem: BulletCasingParticleSystem | null;
+    private currentTime: number;
+
+    constructor(parent: THREE.Object3D) {
         this.parent = parent;
         this.muzzleFlashTexture = null;
         this.smokeTexture = null;
@@ -580,22 +682,21 @@ export class ShootParticleSystem {
         this.loadTextures();
     }
 
-    async loadTextures() {
+    async loadTextures(): Promise<void> {
         const loader = new THREE.TextureLoader();
 
         try {
             this.muzzleFlashTexture = await loader.loadAsync(AssetRegistry.textures.muzzleFlash);
             this.smokeTexture = await loader.loadAsync(AssetRegistry.textures.smoke);
         } catch {
-            const fallback = createFallbackTexture();
-            this.muzzleFlashTexture = fallback;
-            this.smokeTexture = fallback;
+            this.muzzleFlashTexture = createFallbackTexture();
+            this.smokeTexture = createFallbackTexture();
         }
 
         this.initializeParticleSystems();
     }
 
-    initializeParticleSystems() {
+    initializeParticleSystems(): void {
         if (!this.muzzleFlashTexture || !this.smokeTexture) {
             return;
         }
@@ -610,7 +711,7 @@ export class ShootParticleSystem {
         this.bulletSystem = new BulletCasingParticleSystem(this.parent, 100);
     }
 
-    play(position) {
+    play(position: THREE.Vector3): void {
         if (!this.muzzleFlashSystem || !this.smokeSystem || !this.bulletSystem) {
             return;
         }
@@ -620,7 +721,11 @@ export class ShootParticleSystem {
         this.createBulletDrop(position);
     }
 
-    createMuzzleFlash(position) {
+    createMuzzleFlash(position: THREE.Vector3): void {
+        if (!this.muzzleFlashSystem) {
+            return;
+        }
+
         this.muzzleFlashSystem.addParticle({
             duration: 100,
             initialOpacity: 0.9 + 0.1 * Math.random(),
@@ -632,7 +737,11 @@ export class ShootParticleSystem {
         });
     }
 
-    createSmokeParticles(position) {
+    createSmokeParticles(position: THREE.Vector3): void {
+        if (!this.smokeSystem) {
+            return;
+        }
+
         for (let index = 0; index < 30; index += 1) {
             const jitter = new THREE.Vector3(
                 0.05 * (Math.random() - 0.5),
@@ -656,7 +765,11 @@ export class ShootParticleSystem {
         }
     }
 
-    createBulletDrop(position) {
+    createBulletDrop(position: THREE.Vector3): void {
+        if (!this.bulletSystem) {
+            return;
+        }
+
         const jitter = new THREE.Vector3(
             0.05 * (Math.random() - 0.5),
             0.05 * (Math.random() - 0.5),
@@ -678,7 +791,7 @@ export class ShootParticleSystem {
         });
     }
 
-    update(delta, camera) {
+    update(delta: number, camera: THREE.Camera): void {
         this.currentTime += delta * 1000;
 
         if (this.muzzleFlashSystem) {
@@ -694,7 +807,7 @@ export class ShootParticleSystem {
         }
     }
 
-    dispose() {
+    dispose(): void {
         if (this.muzzleFlashSystem) {
             this.muzzleFlashSystem.dispose();
         }
@@ -716,7 +829,7 @@ export class ShootParticleSystem {
         }
     }
 
-    getDebugInfo() {
+    getDebugInfo(): { bulletCount: number; bulletSystemActive: boolean } {
         return {
             bulletCount: this.bulletSystem ? this.bulletSystem.count : 0,
             bulletSystemActive: Boolean(this.bulletSystem),

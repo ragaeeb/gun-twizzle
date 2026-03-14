@@ -6,7 +6,12 @@
  */
 import { expect, type Page, test } from '@playwright/test';
 
-const LEVELS = ['The Compound', 'The Shipyard', 'The Facility'];
+import { LEVEL_1 } from '../src/content/levels/level1';
+import { LEVEL_2 } from '../src/content/levels/level2';
+import { LEVEL_3 } from '../src/content/levels/level3';
+import { LEVEL_4 } from '../src/content/levels/level4';
+
+const LEVELS = [LEVEL_1.name, LEVEL_2.name, LEVEL_3.name, LEVEL_4.name];
 
 const waitForLoadingDismissed = async (page: Page) => {
     try {
@@ -18,13 +23,7 @@ const waitForLoadingDismissed = async (page: Page) => {
             { timeout: 15_000 },
         );
     } catch {
-        await page.evaluate(() => {
-            const el = document.querySelector('.loading-screen');
-            if (el) {
-                el.classList.remove('visible');
-                el.classList.add('hidden');
-            }
-        });
+        throw new Error('Loading screen did not dismiss within 15s');
     }
 };
 
@@ -91,8 +90,10 @@ test.describe('Baseline Collection', () => {
         test.setTimeout(300_000);
 
         console.log('\n=== PERFORMANCE BASELINES ===\n');
-        console.log('| Metric | Level 1 | Level 2 | Level 3 |');
-        console.log('|--------|---------|---------|---------|');
+        const header = `| Metric | ${LEVELS.join(' | ')} |`;
+        const divider = `|${['---', ...LEVELS.map(() => '---')].join('|')}|`;
+        console.log(header);
+        console.log(divider);
 
         const results: Record<string, RendererInfo & { frameTimeP50: number; heapMB: number }> = {};
 
@@ -134,40 +135,71 @@ test.describe('Baseline Collection', () => {
         const fmt = (v: number) => String(v);
         const fmtMs = (v: number) => `${v.toFixed(1)}ms`;
 
+        const formatRow = (label: string, values: number[], formatter: (value: number) => string) =>
+            `| ${label} | ${values.map((value) => formatter(value)).join(' | ')} |`;
+
         console.log(
-            `| Frame time P50 | ${fmtMs(r(LEVELS[0]).frameTimeP50)} | ${fmtMs(r(LEVELS[1]).frameTimeP50)} | ${fmtMs(r(LEVELS[2]).frameTimeP50)} |`,
+            formatRow(
+                'Frame time P50',
+                LEVELS.map((name) => r(name).frameTimeP50),
+                fmtMs,
+            ),
         );
         console.log(
-            `| Draw calls | ${fmt(r(LEVELS[0]).drawCalls)} | ${fmt(r(LEVELS[1]).drawCalls)} | ${fmt(r(LEVELS[2]).drawCalls)} |`,
+            formatRow(
+                'Draw calls',
+                LEVELS.map((name) => r(name).drawCalls),
+                fmt,
+            ),
         );
         console.log(
-            `| Triangles | ${fmt(r(LEVELS[0]).triangles)} | ${fmt(r(LEVELS[1]).triangles)} | ${fmt(r(LEVELS[2]).triangles)} |`,
+            formatRow(
+                'Triangles',
+                LEVELS.map((name) => r(name).triangles),
+                fmt,
+            ),
         );
         console.log(
-            `| JS heap (MB) | ${fmt(r(LEVELS[0]).heapMB)} | ${fmt(r(LEVELS[1]).heapMB)} | ${fmt(r(LEVELS[2]).heapMB)} |`,
+            formatRow(
+                'JS heap (MB)',
+                LEVELS.map((name) => r(name).heapMB),
+                fmt,
+            ),
         );
         console.log(
-            `| Geometries | ${fmt(r(LEVELS[0]).geometries)} | ${fmt(r(LEVELS[1]).geometries)} | ${fmt(r(LEVELS[2]).geometries)} |`,
+            formatRow(
+                'Geometries',
+                LEVELS.map((name) => r(name).geometries),
+                fmt,
+            ),
         );
         console.log(
-            `| Textures | ${fmt(r(LEVELS[0]).textures)} | ${fmt(r(LEVELS[1]).textures)} | ${fmt(r(LEVELS[2]).textures)} |`,
+            formatRow(
+                'Textures',
+                LEVELS.map((name) => r(name).textures),
+                fmt,
+            ),
         );
         console.log(
-            `| Programs | ${fmt(r(LEVELS[0]).programs)} | ${fmt(r(LEVELS[1]).programs)} | ${fmt(r(LEVELS[2]).programs)} |`,
+            formatRow(
+                'Programs',
+                LEVELS.map((name) => r(name).programs),
+                fmt,
+            ),
         );
 
         // Collect sim profiling data from the last level loaded
         await page.goto('/');
-        await selectLevel(page, 'The Facility');
+        await selectLevel(page, LEVELS[LEVELS.length - 1]);
         await waitForRendererInfo(page);
         await page.waitForTimeout(15_000);
 
         const simProfile = await getSimProfile(page);
-        console.log('\n=== COMPONENTSTORE PROFILING (Level 3) ===\n');
+        console.log(`\n=== COMPONENTSTORE PROFILING (${LEVELS[LEVELS.length - 1]}) ===\n`);
         for (const [name, data] of Object.entries(simProfile)) {
             console.log(`| ${name} | avg: ${data.avg.toFixed(4)}ms | samples: ${data.count} |`);
         }
 
-        expect(Object.keys(results)).toHaveLength(3);
+        expect(Object.keys(results)).toHaveLength(LEVELS.length);
     });
 });

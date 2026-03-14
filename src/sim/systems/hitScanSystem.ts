@@ -23,10 +23,11 @@ export const processHitScanResult = (hit: HitScanInput, weaponDef: WeaponDef): D
 
     // Apply distance falloff for hitscan weapons
     if (weaponDef.type === 'hitscan' && weaponDef.falloffStart > 0) {
+        const falloffRange = weaponDef.falloffEnd - weaponDef.falloffStart;
         if (hit.distance > weaponDef.falloffEnd) {
             damage = weaponDef.falloffMinDamage;
-        } else if (hit.distance > weaponDef.falloffStart) {
-            const t = (hit.distance - weaponDef.falloffStart) / (weaponDef.falloffEnd - weaponDef.falloffStart);
+        } else if (hit.distance > weaponDef.falloffStart && falloffRange > 0) {
+            const t = (hit.distance - weaponDef.falloffStart) / falloffRange;
             damage = weaponDef.damage + t * (weaponDef.falloffMinDamage - weaponDef.damage);
         }
     }

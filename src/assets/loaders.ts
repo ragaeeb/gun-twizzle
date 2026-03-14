@@ -8,7 +8,9 @@ import basisTranscoderWasmUrl from 'three/examples/jsm/libs/basis/basis_transcod
 import dracoDecoderWasmUrl from 'three/examples/jsm/libs/draco/draco_decoder.wasm?url';
 import dracoWasmWrapperUrl from 'three/examples/jsm/libs/draco/draco_wasm_wrapper.js?url';
 
-let loader: GLTFLoader | null = null;
+const gltfLoaders = new WeakMap<THREE.WebGLRenderer, GLTFLoader>();
+const dracoLoaders = new WeakMap<THREE.WebGLRenderer, DRACOLoader>();
+const ktx2Loaders = new WeakMap<THREE.WebGLRenderer, KTX2Loader>();
 
 type DracoLoaderInternal = DRACOLoader & {
     _loadLibrary: (url: string, responseType: 'arraybuffer' | 'text') => Promise<unknown>;
@@ -33,13 +35,26 @@ type Ktx2Statics = typeof KTX2Loader & {
 
 const KTX2 = KTX2Loader as unknown as Ktx2Statics;
 
-/**
- * Returns a singleton GLTFLoader configured with Draco, KTX2, and Meshopt decoders.
- * Lazily initializes on first call; subsequent calls return the same instance.
- */
-export const getGLTFLoader = (renderer: THREE.WebGLRenderer): GLTFLoader => {
-    if (loader) {
-        return loader;
+const fetchTextOrThrow = async (url: string) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.status}`);
+    }
+    return response.text();
+};
+
+const fetchArrayBufferOrThrow = async (url: string) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.status}`);
+    }
+    return response.arrayBuffer();
+};
+
+const getDracoLoader = (renderer: THREE.WebGLRenderer) => {
+    const cached = dracoLoaders.get(renderer);
+    if (cached) {
+        return cached;
     }
 
     const dracoLoader = new DRACOLoader();
@@ -48,21 +63,31 @@ export const getGLTFLoader = (renderer: THREE.WebGLRenderer): GLTFLoader => {
     const originalDracoLoadLibrary = dracoInternal._loadLibrary.bind(dracoLoader);
     dracoInternal._loadLibrary = (url, responseType) => {
         if (url === 'draco_wasm_wrapper.js') {
-            return fetch(dracoWasmWrapperUrl).then((response) => response.text());
+            return fetchTextOrThrow(dracoWasmWrapperUrl);
         }
         if (url === 'draco_decoder.wasm') {
-            return fetch(dracoDecoderWasmUrl).then((response) => response.arrayBuffer());
+            return fetchArrayBufferOrThrow(dracoDecoderWasmUrl);
         }
         return originalDracoLoadLibrary(url, responseType);
     };
+
+    dracoLoaders.set(renderer, dracoLoader);
+    return dracoLoader;
+};
+
+const getKtx2Loader = (renderer: THREE.WebGLRenderer) => {
+    const cached = ktx2Loaders.get(renderer);
+    if (cached) {
+        return cached;
+    }
 
     const ktx2Loader = new KTX2Loader();
     ktx2Loader.detectSupport(renderer);
     const ktx2Internal = ktx2Loader as Ktx2LoaderInternal;
     ktx2Internal.init = function init() {
         if (!this.transcoderPending) {
-            const jsContent = fetch(basisTranscoderJsUrl).then((response) => response.text());
-            const binaryContent = fetch(basisTranscoderWasmUrl).then((response) => response.arrayBuffer());
+            const jsContent = fetchTextOrThrow(basisTranscoderJsUrl);
+            const binaryContent = fetchArrayBufferOrThrow(basisTranscoderWasmUrl);
 
             this.transcoderPending = Promise.all([jsContent, binaryContent]).then(([jsContent, binaryContent]) => {
                 const fn = KTX2.BasisWorker.toString();
@@ -95,11 +120,28 @@ export const getGLTFLoader = (renderer: THREE.WebGLRenderer): GLTFLoader => {
         return this.transcoderPending!;
     };
 
-    loader = new GLTFLoader();
+    ktx2Loaders.set(renderer, ktx2Loader);
+    return ktx2Loader;
+};
+
+/**
+ * Returns a renderer-scoped GLTFLoader configured with Draco, KTX2, and Meshopt decoders.
+ */
+export const getGLTFLoader = (renderer: THREE.WebGLRenderer): GLTFLoader => {
+    const cached = gltfLoaders.get(renderer);
+    if (cached) {
+        return cached;
+    }
+
+    const dracoLoader = getDracoLoader(renderer);
+    const ktx2Loader = getKtx2Loader(renderer);
+
+    const loader = new GLTFLoader();
     loader.setDRACOLoader(dracoLoader);
     loader.setKTX2Loader(ktx2Loader);
     loader.setMeshoptDecoder(MeshoptDecoder);
 
+    gltfLoaders.set(renderer, loader);
     return loader;
 };
 
@@ -109,9 +151,19 @@ export const getGLTFLoader = (renderer: THREE.WebGLRenderer): GLTFLoader => {
  */
 export const validateLoaderPrerequisites = async (): Promise<void> => {
     const checks = [
+        fetch(dracoWasmWrapperUrl, { method: 'HEAD' }).then((response) => {
+            if (!response.ok) {
+                throw new Error('Draco JS wrapper not found.');
+            }
+        }),
         fetch(dracoDecoderWasmUrl, { method: 'HEAD' }).then((response) => {
             if (!response.ok) {
                 throw new Error('Draco decoder not found.');
+            }
+        }),
+        fetch(basisTranscoderJsUrl, { method: 'HEAD' }).then((response) => {
+            if (!response.ok) {
+                throw new Error('Basis transcoder JS not found.');
             }
         }),
         fetch(basisTranscoderWasmUrl, { method: 'HEAD' }).then((response) => {

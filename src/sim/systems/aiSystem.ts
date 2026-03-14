@@ -1,4 +1,4 @@
-import type { EnemyDef } from '../../content/enemies/definitions';
+import type { EnemyDef, EnemyRegistry } from '../../content/enemies/definitions';
 import type { WallDef } from '../../content/levels/types';
 import type { SimEvent } from '../events';
 import { hasLineOfSight } from '../lineOfSight';
@@ -69,10 +69,41 @@ const handleDeath = (ai: AIComponent): void => {
     ai.targetEntityId = null;
 };
 
-const handleIdleOrPatrol = (ai: AIComponent, dSq: number, detectionRangeSq: number, playerEntityId: EntityId): void => {
+const handleIdleOrPatrol = (
+    ai: AIComponent,
+    dSq: number,
+    detectionRangeSq: number,
+    playerEntityId: EntityId,
+    transform: TransformComponent,
+    speed: number,
+    dt: number,
+): void => {
     if (dSq <= detectionRangeSq) {
         ai.state = 'chase';
         ai.targetEntityId = playerEntityId;
+        return;
+    }
+
+    if (ai.patrolPath.length === 0) {
+        ai.state = 'idle';
+        ai.targetEntityId = null;
+        return;
+    }
+
+    if (ai.state !== 'patrol') {
+        ai.state = 'patrol';
+    }
+    ai.targetEntityId = null;
+
+    const target = ai.patrolPath[ai.patrolIndex];
+    if (!target) {
+        ai.patrolIndex = 0;
+        return;
+    }
+
+    moveToward(transform.position, target, speed * dt);
+    if (distanceSq(transform.position, target) < 0.04) {
+        ai.patrolIndex = (ai.patrolIndex + 1) % ai.patrolPath.length;
     }
 };
 
@@ -156,7 +187,7 @@ const handleAttack = (
 const updateEnemy = (
     world: World,
     entityId: EntityId,
-    enemyDefs: Record<string, EnemyDef>,
+    enemyDefs: EnemyRegistry,
     playerEntityId: EntityId,
     playerPosition: { x: number; y: number; z: number },
     dt: number,
@@ -177,8 +208,10 @@ const updateEnemy = (
     }
 
     // Look up per-enemy def
-    const def = enemyDefs[ai.enemyDefId] ?? Object.values(enemyDefs)[0];
+    const def = enemyDefs[ai.enemyDefId];
     if (!def) {
+        ai.state = 'idle';
+        ai.targetEntityId = null;
         return;
     }
 
@@ -195,7 +228,7 @@ const updateEnemy = (
     const dSq = distanceSq(transform.position, playerPosition);
 
     if (ai.state === 'idle' || ai.state === 'patrol') {
-        handleIdleOrPatrol(ai, dSq, detectionRangeSq, playerEntityId);
+        handleIdleOrPatrol(ai, dSq, detectionRangeSq, playerEntityId, transform, def.speed, dt);
     } else if (ai.state === 'chase') {
         handleChase(
             ai,
@@ -233,7 +266,7 @@ const updateEnemy = (
 export const aiSystem = (
     world: World,
     playerEntityId: EntityId | null,
-    enemyDefs: Record<string, EnemyDef>,
+    enemyDefs: EnemyRegistry,
     dt: number,
     outEvents: SimEvent[],
     walls: WallDef[] = [],

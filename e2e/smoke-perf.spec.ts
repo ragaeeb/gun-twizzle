@@ -22,13 +22,7 @@ const waitForLoadingDismissed = async (page: Page) => {
             { timeout: 15_000 },
         );
     } catch {
-        await page.evaluate(() => {
-            const el = document.querySelector('.loading-screen');
-            if (el) {
-                el.classList.remove('visible');
-                el.classList.add('hidden');
-            }
-        });
+        throw new Error('Loading screen did not dismiss within 15s');
     }
 };
 

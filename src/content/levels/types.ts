@@ -2,6 +2,8 @@
  * Shared level definition types.
  */
 
+import type { EnemyId } from '../enemies/definitions';
+
 export type MissionObjective =
     | { type: 'kill_count'; params: { count: number } }
     | { type: 'kill_target'; params: { targetEnemySpawnId: string } }
@@ -9,14 +11,16 @@ export type MissionObjective =
     | { type: 'survive_timer'; params: { durationSeconds: number } };
 
 export type EnemySpawn = {
-    enemyDefId: string;
+    enemyDefId: EnemyId;
     patrolPath?: Array<{ x: number; y: number; z: number }>;
     position: { x: number; y: number; z: number };
     spawnId?: string; // unique identifier for target-kill missions
 };
 
+export type PickupId = 'health' | 'ammo' | 'shield';
+
 export type PickupSpawn = {
-    pickupId: 'health' | 'ammo' | 'shield';
+    pickupId: PickupId;
     position: { x: number; y: number; z: number };
 };
 

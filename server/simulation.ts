@@ -292,13 +292,23 @@ const buildPickupSnapshots = (world: World): PickupSnapshot[] => {
     return result;
 };
 
-// ─── Main factory ───────────────────────────────────────────────────────
+// Main factory
 
 export const createServerSimulation = (levelDef: LevelDef, room: Room): ServerSimulation => {
     const world: World = createWorld();
     const clock: SimClock = createClock(TICK_HZ);
     const eventQueue: EventQueue = createEventQueue();
-    const missionState: MissionState = createMissionState('eliminate', levelDef.enemies.length);
+
+    // Use levelDef.missions if available, otherwise fall back to legacy behavior
+    const firstMission = levelDef.missions?.[0];
+    const mission =
+        firstMission ??
+        ({
+            params: { count: levelDef.enemies.length },
+            type: 'kill_count',
+        } as LevelDef['missions'][number]);
+
+    const missionState: MissionState = createMissionState(mission);
 
     const playerEntityMap = new Map<string, EntityId>();
     const playerLastShotTick = new Map<string, number>();
@@ -306,7 +316,7 @@ export const createServerSimulation = (levelDef: LevelDef, room: Room): ServerSi
     let simTime = 0;
     let ticks = 0;
 
-    const RIFLE_FIRE_INTERVAL = Math.ceil(TICK_HZ / (WEAPON_REGISTRY.rifle?.fireRateHz ?? 10));
+    const AK47_FIRE_INTERVAL = Math.ceil(TICK_HZ / (WEAPON_REGISTRY.ak47?.fireRateHz ?? 10));
 
     const spawnLevelEnemies = () => {
         for (const enemySpawn of levelDef.enemies) {
@@ -314,7 +324,7 @@ export const createServerSimulation = (levelDef: LevelDef, room: Room): ServerSi
             if (!def) {
                 continue;
             }
-            const id = spawnEnemy(world, def, enemySpawn.position, enemySpawn.patrolPath);
+            const id = spawnEnemy(world, def, enemySpawn.position, enemySpawn.patrolPath, enemySpawn.spawnId);
             enemyEntityIds.push(id);
             if (enemySpawn.spawnId === 'boss') {
                 const health = world.health.get(id);
@@ -343,8 +353,11 @@ export const createServerSimulation = (levelDef: LevelDef, room: Room): ServerSi
     spawnLevelPickups();
 
     const getFirstPlayerEntityId = (): EntityId | null => {
-        const ids = getEntitiesWithTag(world, 'player');
-        return ids[0] ?? null;
+        // Use iterator to avoid allocation in hot path
+        for (const id of getEntitiesWithTag(world, 'player')) {
+            return id;
+        }
+        return null;
     };
 
     const resetLevel = () => {
@@ -361,7 +374,8 @@ export const createServerSimulation = (levelDef: LevelDef, room: Room): ServerSi
         spawnLevelPickups();
 
         missionState.isComplete = false;
-        missionState.killCount = 0;
+        missionState.progress = 0;
+        missionState.elapsedSeconds = 0;
         simTime = 0;
     };
 
@@ -391,10 +405,28 @@ export const createServerSimulation = (levelDef: LevelDef, room: Room): ServerSi
             return;
         }
 
-        if (input.cameraPosition) {
-            transform.position.x = input.cameraPosition[0];
-            transform.position.y = input.cameraPosition[1] - PLAYER_EYE_Y_OFFSET;
-            transform.position.z = input.cameraPosition[2];
+        const cameraPosition = input.cameraPosition;
+        const cameraPositionIsValid =
+            Array.isArray(cameraPosition) &&
+            cameraPosition.length === 3 &&
+            cameraPosition.every((value) => Number.isFinite(value));
+
+        if (cameraPositionIsValid) {
+            const [x, y, z] = cameraPosition;
+            const targetY = y - PLAYER_EYE_Y_OFFSET;
+            const dx = x - transform.position.x;
+            const dy = targetY - transform.position.y;
+            const dz = z - transform.position.z;
+            const maxMovePerTick = computeSpeed(input) * dt * 2;
+            const moveDist = Math.hypot(dx, dy, dz);
+
+            if (moveDist > maxMovePerTick) {
+                applyKinematicFallback(transform, input, dt);
+            } else {
+                transform.position.x = x;
+                transform.position.y = targetY;
+                transform.position.z = z;
+            }
         } else {
             applyKinematicFallback(transform, input, dt);
         }
@@ -489,7 +521,7 @@ export const createServerSimulation = (levelDef: LevelDef, room: Room): ServerSi
 
             if (input.shoot) {
                 const lastShot = playerLastShotTick.get(playerId) ?? -Infinity;
-                if (ticks - lastShot >= RIFLE_FIRE_INTERVAL) {
+                if (ticks - lastShot >= AK47_FIRE_INTERVAL) {
                     playerLastShotTick.set(playerId, ticks);
                     processShoot(playerId, input);
                 }
@@ -523,8 +555,8 @@ export const createServerSimulation = (levelDef: LevelDef, room: Room): ServerSi
                 shieldRechargeDelay: 0,
             });
             world.weaponOwner.set(id, {
-                ammo: { knife: { magazine: 1, reserve: 0 }, rifle: { magazine: 30, reserve: 90 } },
-                equippedWeaponId: 'rifle',
+                ammo: { ak47: { magazine: 30, reserve: 90 }, knife: { magazine: 1, reserve: 0 } },
+                equippedWeaponId: 'ak47',
             });
             addTag(world, id, 'player');
         },
@@ -571,7 +603,7 @@ export const createServerSimulation = (levelDef: LevelDef, room: Room): ServerSi
 
             statusEffectSystem(world, dt);
             applyShieldRegen(world, dt);
-            missionSystem(missionState, outEvents, outEvents);
+            missionSystem(missionState, outEvents, outEvents, dt);
 
             swapEventBuffers(eventQueue);
         },

@@ -7,7 +7,7 @@ import {
     DEFAULT_PLAYER_CONFIG,
     moveCharacter,
 } from '../physics/characterController';
-import { PLAYER_GROUP } from '../physics/collisionLayers';
+import { PLAYER_GROUP, WORLD_GROUP } from '../physics/collisionLayers';
 
 // Two copies of rapier exist at runtime (@react-three/rapier bundles its own).
 // We use a loose type alias for the module to accept either copy.
@@ -40,6 +40,7 @@ export class PhysicsSystem {
         const rigidBodyDesc = this.rapier.RigidBodyDesc.fixed();
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
         const colliderDesc = this.rapier.ColliderDesc.cuboid(width / 2, 0.1, depth / 2);
+        colliderDesc.setCollisionGroups(WORLD_GROUP);
         this.world.createCollider(colliderDesc, rigidBody);
         return rigidBody;
     }
@@ -56,6 +57,9 @@ export class PhysicsSystem {
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
         const colliderDesc = this.rapier.ColliderDesc.cuboid(width / 2, height / 2, depth / 2);
         colliderDesc.setFriction(1);
+        if (isFixed) {
+            colliderDesc.setCollisionGroups(WORLD_GROUP);
+        }
         this.world.createCollider(colliderDesc, rigidBody);
 
         return rigidBody;
@@ -66,15 +70,19 @@ export class PhysicsSystem {
             return null;
         }
 
+        const halfHeight = height / 2 - radius;
+        if (halfHeight <= 0) {
+            console.warn('createPlayerBody: height must be greater than 2 * radius');
+            return null;
+        }
+
         const rigidBodyDesc = this.rapier.RigidBodyDesc.dynamic()
             .setTranslation(position.x, position.y, position.z)
             .setCcdEnabled(true)
             .lockRotations();
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
-        const colliderDesc = this.rapier.ColliderDesc.capsule(height / 2, radius)
-            .setFriction(0)
-            .setRestitution(0);
+        const colliderDesc = this.rapier.ColliderDesc.capsule(halfHeight, radius).setFriction(0).setRestitution(0);
 
         this.world.createCollider(colliderDesc, rigidBody);
         return rigidBody;
@@ -175,6 +183,7 @@ export class PhysicsSystem {
 
             const rigidBodyDesc = isFixed ? this.rapier.RigidBodyDesc.fixed() : this.rapier.RigidBodyDesc.dynamic();
             rigidBodyDesc.setTranslation(position.x, position.y, position.z);
+            const bodyOrigin = new THREE.Vector3(position.x, position.y, position.z);
 
             const rigidBody = this.world.createRigidBody(rigidBodyDesc);
             const meshes = AssetManager.extractMeshes(root);
@@ -194,6 +203,7 @@ export class PhysicsSystem {
                 for (let index = 0; index < positions.count; index += 1) {
                     vertex.fromBufferAttribute(positions, index);
                     mesh.localToWorld(vertex);
+                    vertex.sub(bodyOrigin);
                     vertices[index * 3] = vertex.x;
                     vertices[index * 3 + 1] = vertex.y;
                     vertices[index * 3 + 2] = vertex.z;
@@ -205,6 +215,9 @@ export class PhysicsSystem {
 
                 const colliderDesc = this.rapier.ColliderDesc.trimesh(vertices, triangleIndices);
                 colliderDesc.setFriction(0);
+                if (isFixed) {
+                    colliderDesc.setCollisionGroups(WORLD_GROUP);
+                }
                 this.world.createCollider(colliderDesc, rigidBody);
             }
 
@@ -233,6 +246,9 @@ export class PhysicsSystem {
     resizePlayerCapsule(handle: CharacterControllerHandle, newHeight: number): void {
         const radius = DEFAULT_PLAYER_CONFIG.radius;
         const newHalfHeight = newHeight / 2 - radius;
+        if (newHalfHeight <= 0) {
+            return;
+        }
 
         try {
             // biome-ignore lint/suspicious/noExplicitAny: setHalfHeight exists on capsule colliders but may not be in TS defs

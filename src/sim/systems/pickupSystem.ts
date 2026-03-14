@@ -1,3 +1,4 @@
+import type { PickupId } from '../../content/levels/types';
 import type { SimEvent } from '../events';
 import type { EntityId, PickupComponent, World } from '../world';
 import { getEntitiesWithTag } from '../world';
@@ -7,8 +8,6 @@ export const HEALTH_RESTORE = 25;
 export const AMMO_RESTORE = 30;
 export const SHIELD_RESTORE = 50;
 const RESPAWN_DELAY = 15; // seconds
-
-export type PickupType = 'health' | 'ammo' | 'shield';
 
 const tryCollectHealth = (world: World, playerEntityId: EntityId): boolean => {
     const health = world.health.get(playerEntityId);
@@ -25,9 +24,10 @@ const tryCollectAmmo = (world: World, playerEntityId: EntityId): boolean => {
         return false;
     }
     const ammoData = weaponOwner.ammo[weaponOwner.equippedWeaponId];
-    if (ammoData) {
-        ammoData.reserve += AMMO_RESTORE;
+    if (!ammoData) {
+        return false;
     }
+    ammoData.reserve += AMMO_RESTORE;
     return true;
 };
 
@@ -62,15 +62,14 @@ const tryRespawn = (pickup: PickupComponent, simTime: number): boolean => {
     return true; // still in respawn state (skip collection)
 };
 
-const tryCollect = (world: World, playerEntityId: EntityId, pickupId: string): boolean => {
-    const pickupType = pickupId as PickupType;
-    if (pickupType === 'health') {
+const tryCollect = (world: World, playerEntityId: EntityId, pickupId: PickupId): boolean => {
+    if (pickupId === 'health') {
         return tryCollectHealth(world, playerEntityId);
     }
-    if (pickupType === 'ammo') {
+    if (pickupId === 'ammo') {
         return tryCollectAmmo(world, playerEntityId);
     }
-    if (pickupType === 'shield') {
+    if (pickupId === 'shield') {
         return tryCollectShield(world, playerEntityId);
     }
     return false;

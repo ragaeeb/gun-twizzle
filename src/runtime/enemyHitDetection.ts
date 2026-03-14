@@ -4,7 +4,6 @@ import type { HitScanInput } from '../sim/systems/hitScanSystem';
 import type { World } from '../sim/world';
 import { getEntitiesWithTag } from '../sim/world';
 import type { WeaponId as GameWeaponId } from './types';
-import { WeaponId } from './types';
 
 type Vec3 = { x: number; y: number; z: number };
 
@@ -138,7 +137,7 @@ const findClosestHit = (
 };
 
 export const getSimWeaponDefForGameWeapon = (weaponId: GameWeaponId): WeaponDef => {
-    const weaponDef = weaponId === WeaponId.KNIFE ? WEAPON_REGISTRY.knife : WEAPON_REGISTRY.rifle;
+    const weaponDef = WEAPON_REGISTRY[weaponId.toLowerCase()];
     if (!weaponDef) {
         throw new Error(`Missing simulation weapon definition for "${weaponId}".`);
     }

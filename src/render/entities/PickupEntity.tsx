@@ -4,11 +4,12 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 import { AssetRegistry } from '../../assets/registry';
+import type { PickupId } from '../../content/levels/types';
 import type { EntityId, World } from '../../sim/world';
 
 type PickupEntityProps = {
     entityId: EntityId;
-    pickupId: string;
+    pickupId: PickupId;
     world: World;
 };
 
@@ -17,7 +18,7 @@ type PickupModelConfig = {
     targetSize: number;
 };
 
-const PICKUP_MODELS: Record<string, PickupModelConfig> = {
+const PICKUP_MODELS: Record<PickupId, PickupModelConfig> = {
     ammo: {
         path: AssetRegistry.pickups.ammo,
         targetSize: 0.9,
@@ -60,11 +61,11 @@ const preparePickupModel = (scene: THREE.Group, targetSize: number) => {
 export const PickupEntity = ({ entityId, pickupId, world }: PickupEntityProps) => {
     const groupRef = useRef<THREE.Group>(null);
     const config = PICKUP_MODELS[pickupId];
-    const { scene } = useGLTF(config?.path ?? AssetRegistry.pickups.health);
-    const pickupModel = useMemo(
-        () => preparePickupModel(scene, config?.targetSize ?? 0.85),
-        [config?.targetSize, scene],
-    );
+    if (!config) {
+        throw new Error(`PickupEntity: Unknown pickupId "${pickupId}"`);
+    }
+    const { scene } = useGLTF(config.path);
+    const pickupModel = useMemo(() => preparePickupModel(scene, config.targetSize), [config.targetSize, scene]);
 
     useFrame((state) => {
         if (!groupRef.current) {

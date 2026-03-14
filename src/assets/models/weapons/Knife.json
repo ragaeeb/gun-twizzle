@@ -16,14 +16,14 @@
             "time": 2.7
         },
         {
-            "frame": 100,
-            "name": "Shoot_End",
-            "time": 3.333
-        },
-        {
             "frame": 84,
             "name": "Sound_knife",
             "time": 2.8
+        },
+        {
+            "frame": 100,
+            "name": "Shoot_End",
+            "time": 3.333
         },
         {
             "frame": 121,

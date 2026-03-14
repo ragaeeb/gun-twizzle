@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import { Physics } from '@react-three/rapier';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 import { AssetRegistry } from '../assets/registry';
@@ -49,24 +49,27 @@ export const GameSession = ({ levelDef, onMissionComplete, onPlayerDefeated }: G
     const [camera] = useState(() => new FpsCamera());
     const [physics] = useState(() => new PhysicsSystem());
     const [scene] = useState(() => new GameScene());
+    const [netSession, setNetSession] = useState<NetSession | undefined>(undefined);
     const defeatHandledRef = useRef(false);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
     // Multiplayer: create a NetSession only when VITE_MULTIPLAYER_URL is set.
     // When absent (e.g. Vercel deploy), this is null and the game is pure offline.
-    const netSession = useMemo<NetSession | undefined>(() => {
+    useEffect(() => {
         const url = getServerUrl();
         if (!url) {
-            return undefined;
+            setNetSession(undefined);
+            return;
         }
-        return createNetSession(url, 'Player');
-    }, []);
 
-    useEffect(() => {
+        const session = createNetSession(url, 'Player');
+        setNetSession(session);
+
         return () => {
-            netSession?.destroy();
+            session.destroy();
+            setNetSession(undefined);
         };
-    }, [netSession]);
+    }, []);
 
     useEffect(() => {
         if (hudState.health > 0 || defeatHandledRef.current) {

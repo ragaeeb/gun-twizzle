@@ -42,7 +42,7 @@ if (hasGltfTransform) {
                         stdio: 'pipe',
                     });
                     const after = statSync(filePath).size;
-                    const savings = ((1 - after / before) * 100).toFixed(1);
+                    const savings = before > 0 ? ((1 - after / before) * 100).toFixed(1) : '0.0';
                     console.log(
                         `  ${(before / 1024).toFixed(0)} KB → ${(after / 1024).toFixed(0)} KB (${savings}% smaller)`,
                     );

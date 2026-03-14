@@ -9,7 +9,7 @@ import { Perf } from 'r3f-perf';
  * For routine dev metrics, use DevMetrics instead (no render patching).
  */
 export const PerfOverlay = () => {
-    if (!import.meta.env.DEV) {
+    if (!import.meta.env.DEV || typeof window === 'undefined') {
         return null;
     }
     const enabled = new URLSearchParams(window.location.search).get('perf') === '1';

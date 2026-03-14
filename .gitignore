@@ -7,3 +7,4 @@ coverage
 *.local
 .minimax
 test-results
+.env

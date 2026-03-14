@@ -9,7 +9,8 @@
                     "options": { "sortOrder": "natural" }
                 }
             }
-        }
+        },
+        "enabled": true
     },
 
     "files": {

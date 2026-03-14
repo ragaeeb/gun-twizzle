@@ -90,6 +90,14 @@ describe('InterpolationBuffer', () => {
         expect(buf.interpolate(500)).toBe(20);
     });
 
+    it('returns the oldest entry when target time is before all snapshots', () => {
+        const buf = createInterpolationBuffer(lerpNum, 4, 0);
+        buf.push(1, 100, 10);
+        buf.push(2, 200, 20);
+
+        expect(buf.interpolate(50)).toBe(10);
+    });
+
     it('evicts old entries when buffer is full', () => {
         const buf = createInterpolationBuffer(lerpNum, 2, 0);
         buf.push(1, 100, 10);

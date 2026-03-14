@@ -59,7 +59,7 @@ describe('protocol encoding/decoding', () => {
                         position: [0, 5, 5],
                         rotation: [1, 0, 0, 0],
                         stance: 'standing',
-                        weaponId: 'rifle',
+                        weaponId: 'AK47',
                     },
                 ],
             },
@@ -93,5 +93,30 @@ describe('protocol encoding/decoding', () => {
             expect(decoded.damage).toBe(56);
             expect(decoded.isHeadshot).toBe(true);
         }
+    });
+
+    it('rejects a structurally invalid client message', () => {
+        expect(() => decodeClientMessage('{"type":"c:input","seq":"42","input":null}')).toThrow();
+    });
+
+    it('rejects a client join without a name', () => {
+        expect(() => decodeClientMessage('{"type":"c:join"}')).toThrow();
+    });
+
+    it('rejects a structurally invalid server message', () => {
+        expect(() => decodeServerMessage('{"type":"s:welcome","tick":1,"snapshot":{}}')).toThrow();
+    });
+
+    it('rejects a server snapshot with invalid lastInputSeq', () => {
+        expect(() =>
+            decodeServerMessage(
+                JSON.stringify({
+                    lastInputSeq: { player: 'nope' },
+                    snapshot: { enemies: [], pickups: [], players: [] },
+                    tick: 1,
+                    type: 's:snapshot',
+                }),
+            ),
+        ).toThrow();
     });
 });

@@ -14,7 +14,7 @@ export type EnemyDef = {
     speed: number;
 };
 
-export const ENEMY_REGISTRY: Record<string, EnemyDef> = {
+export const ENEMY_REGISTRY = {
     grunt: {
         attackDamage: 12,
         attackRange: 20,
@@ -75,4 +75,7 @@ export const ENEMY_REGISTRY: Record<string, EnemyDef> = {
         scoreValue: 25,
         speed: 0,
     },
-};
+} as const satisfies Record<string, EnemyDef>;
+
+export type EnemyId = keyof typeof ENEMY_REGISTRY;
+export type EnemyRegistry = typeof ENEMY_REGISTRY;

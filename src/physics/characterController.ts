@@ -56,6 +56,9 @@ export const createCharacterController = (
     const rigidBody = world.createRigidBody(rigidBodyDesc);
 
     const halfHeight = config.height / 2 - config.radius;
+    if (config.radius <= 0 || halfHeight <= 0) {
+        throw new Error(`Invalid character controller dimensions: height=${config.height}, radius=${config.radius}`);
+    }
     const colliderDesc = rapier.ColliderDesc.capsule(halfHeight, config.radius).setCollisionGroups(PLAYER_GROUP);
     const collider = world.createCollider(colliderDesc, rigidBody);
 

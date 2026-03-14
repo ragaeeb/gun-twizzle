@@ -16,6 +16,7 @@ const addEnemy = (x: number, y: number, z: number, health = 90) => {
         enemyDefId: 'trainingDummy',
         patrolIndex: 0,
         patrolPath: [],
+        spawnId: null,
         state: 'idle',
         targetEntityId: null,
     });

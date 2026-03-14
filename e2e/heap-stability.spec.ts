@@ -9,23 +9,13 @@ test('JS heap does not grow unboundedly during gameplay', async ({ page }) => {
     const card = page.locator('.level-select-card', { hasText: 'The Compound' });
     await card.click();
 
-    try {
-        await page.waitForFunction(
-            () => {
-                const el = document.querySelector('.loading-screen');
-                return !el || el.classList.contains('hidden');
-            },
-            { timeout: 15_000 },
-        );
-    } catch {
-        await page.evaluate(() => {
+    await page.waitForFunction(
+        () => {
             const el = document.querySelector('.loading-screen');
-            if (el) {
-                el.classList.remove('visible');
-                el.classList.add('hidden');
-            }
-        });
-    }
+            return !el || el.classList.contains('hidden');
+        },
+        { timeout: 15_000 },
+    );
 
     await page.waitForTimeout(5_000);
 

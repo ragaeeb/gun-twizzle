@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
 const percentile = (arr: number[], p: number) => {
+    if (arr.length === 0) {
+        return Number.NaN;
+    }
     const sorted = arr.toSorted((a, b) => a - b);
     const i = Math.ceil((sorted.length * p) / 100) - 1;
     return sorted[Math.max(0, i)];
@@ -24,6 +27,7 @@ test.describe('Sustained Performance', () => {
                 { timeout: 15_000 },
             );
         } catch {
+            console.warn('Loading screen did not auto-hide; forcing hidden state.');
             await page.evaluate(() => {
                 const el = document.querySelector('.loading-screen');
                 if (el) {
@@ -31,6 +35,14 @@ test.describe('Sustained Performance', () => {
                     el.classList.add('hidden');
                 }
             });
+            await page.waitForFunction(
+                () => {
+                    const canvas = document.querySelector('canvas');
+                    const el = document.querySelector('.loading-screen');
+                    return Boolean(canvas) && (!el || el.classList.contains('hidden'));
+                },
+                { timeout: 5_000 },
+            );
         }
 
         await page.waitForFunction(
@@ -55,12 +67,15 @@ test.describe('Sustained Performance', () => {
             () => [...(window as any).__FRAME_TIME_SAMPLES__],
         );
 
-        const earlyP50 = percentile(earlyFrameTimes, 50)!;
-        const earlyP95 = percentile(earlyFrameTimes, 95)!;
-        const earlyP99 = percentile(earlyFrameTimes, 99)!;
-        const lateP50 = percentile(lateFrameTimes, 50)!;
-        const lateP95 = percentile(lateFrameTimes, 95)!;
-        const lateP99 = percentile(lateFrameTimes, 99)!;
+        expect(earlyFrameTimes.length, 'Early frame samples missing').toBeGreaterThan(0);
+        expect(lateFrameTimes.length, 'Late frame samples missing').toBeGreaterThan(0);
+
+        const earlyP50 = percentile(earlyFrameTimes, 50);
+        const earlyP95 = percentile(earlyFrameTimes, 95);
+        const earlyP99 = percentile(earlyFrameTimes, 99);
+        const lateP50 = percentile(lateFrameTimes, 50);
+        const lateP95 = percentile(lateFrameTimes, 95);
+        const lateP99 = percentile(lateFrameTimes, 99);
 
         console.log('=== Frame Time Stability (5-minute soak) ===');
         console.log(

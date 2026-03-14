@@ -1,30 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { addTag, createEntity, createWorld, destroyEntity, getEntitiesWithTag, hasTag, type World } from '../world';
-
-const spawnEnemy = (world: World) => {
-    const id = createEntity(world);
-    world.transform.set(id, {
-        position: { x: 0, y: 0, z: 0 },
-        rotation: { w: 1, x: 0, y: 0, z: 0 },
-    });
-    world.health.set(id, { current: 100, max: 100, shieldCurrent: 0, shieldMax: 0, shieldRechargeDelay: 0 });
-    world.ai.set(id, {
-        attackCooldown: 0,
-        enemyDefId: 'grunt',
-        patrolIndex: 0,
-        patrolPath: [],
-        state: 'idle',
-        targetEntityId: null,
-    });
-    addTag(world, id, 'enemy');
-    return id;
-};
+import { ENEMY_REGISTRY } from '../../content/enemies/definitions';
+import { spawnEnemy } from '../systems/spawnSystem';
+import { createEntity, createWorld, destroyEntity, getEntitiesWithTag, hasTag } from '../world';
 
 describe('Entity lifecycle', () => {
     it('destroyEntity removes all components from the world', () => {
         const world = createWorld();
-        const id = spawnEnemy(world);
+        const id = spawnEnemy(world, ENEMY_REGISTRY.grunt, { x: 0, y: 0, z: 0 });
 
         expect(world.transform.has(id)).toBe(true);
         expect(world.health.has(id)).toBe(true);
@@ -44,14 +27,14 @@ describe('Entity lifecycle', () => {
 
     it('destroyed entity no longer appears in tag queries', () => {
         const world = createWorld();
-        const id1 = spawnEnemy(world);
-        const id2 = spawnEnemy(world);
+        const id1 = spawnEnemy(world, ENEMY_REGISTRY.grunt, { x: 0, y: 0, z: 0 });
+        const id2 = spawnEnemy(world, ENEMY_REGISTRY.grunt, { x: 1, y: 0, z: 0 });
 
-        expect(getEntitiesWithTag(world, 'enemy')).toHaveLength(2);
+        expect(Array.from(getEntitiesWithTag(world, 'enemy'))).toHaveLength(2);
 
         destroyEntity(world, id1);
 
-        const remaining = getEntitiesWithTag(world, 'enemy');
+        const remaining = Array.from(getEntitiesWithTag(world, 'enemy'));
         expect(remaining).toHaveLength(1);
         expect(remaining[0]).toBe(id2);
     });

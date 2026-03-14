@@ -6,7 +6,7 @@ export class NetClient {
     private handlers = new Set<EventHandler>();
 
     connect() {
-        // Placeholder for future Socket.IO connection.
+        throw new Error('NetClient.connect() is not implemented yet');
     }
 
     disconnect() {
@@ -19,6 +19,6 @@ export class NetClient {
     }
 
     send(_event: NetEvent) {
-        // Stub for outgoing events.
+        throw new Error('NetClient.send() is not implemented yet');
     }
 }

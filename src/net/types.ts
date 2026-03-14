@@ -1,4 +1,14 @@
-export type { NetEvent } from '../runtime/types';
+export type NetEvent =
+    | { type: 'player:join'; id: string }
+    | { type: 'player:leave'; id: string }
+    | {
+          type: 'player:state';
+          id: string;
+          position: [number, number, number];
+          rotation: [number, number, number, number];
+      }
+    | { type: 'weapon:fire'; id: string; weaponId: string };
+
 export type {
     ClientMessage,
     EnemySnapshot,

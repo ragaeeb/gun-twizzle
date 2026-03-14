@@ -31,6 +31,19 @@ export const createInterpolationBuffer = <T>(
 ): InterpolationBuffer<T> => {
     let entries: Array<SnapshotEntry<T>> = [];
 
+    const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+    const findBracketingEntries = (targetTime: number) => {
+        for (let i = 0; i < entries.length - 1; i++) {
+            const current = entries[i]!;
+            const next = entries[i + 1]!;
+            if (current.time <= targetTime && next.time >= targetTime) {
+                return { after: next, before: current };
+            }
+        }
+        return null;
+    };
+
     return {
         clear: () => {
             entries = [];
@@ -39,36 +52,32 @@ export const createInterpolationBuffer = <T>(
         interpolate: (renderTime: number) => {
             const targetTime = renderTime - renderDelayMs;
 
-            if (entries.length === 0) {
+            const entryCount = entries.length;
+            if (entryCount === 0) {
                 return null;
             }
 
-            if (entries.length === 1) {
+            if (entryCount === 1) {
                 return entries[0]!.data;
             }
 
-            // Find the two snapshots that bracket targetTime
-            let before: SnapshotEntry<T> | null = null;
-            let after: SnapshotEntry<T> | null = null;
-
-            for (let i = 0; i < entries.length - 1; i++) {
-                const current = entries[i]!;
-                const next = entries[i + 1]!;
-                if (current.time <= targetTime && next.time >= targetTime) {
-                    before = current;
-                    after = next;
-                    break;
-                }
+            if (targetTime <= entries[0]!.time) {
+                return entries[0]!.data;
             }
 
-            // If target time is past all snapshots, use the latest
-            if (!before || !after) {
-                return entries[entries.length - 1]!.data;
+            const lastEntry = entries[entryCount - 1]!;
+            if (targetTime >= lastEntry.time) {
+                return lastEntry.data;
             }
 
-            const range = after.time - before.time;
-            const t = range > 0 ? (targetTime - before.time) / range : 1;
-            return lerpFn(before.data, after.data, Math.max(0, Math.min(1, t)));
+            const pair = findBracketingEntries(targetTime);
+            if (!pair) {
+                return lastEntry.data;
+            }
+
+            const range = pair.after.time - pair.before.time;
+            const t = range > 0 ? (targetTime - pair.before.time) / range : 1;
+            return lerpFn(pair.before.data, pair.after.data, clamp01(t));
         },
 
         push: (tick: number, time: number, data: T) => {

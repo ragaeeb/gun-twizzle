@@ -42,8 +42,15 @@ for (const [dir, budget] of Object.entries(BUDGETS)) {
         } else {
             console.log(`✅ ${dir}: ${totalSize.toFixed(1)} MB / ${budget.maxTotalSizeMB} MB`);
         }
-    } catch {
-        console.warn(`⚠️ Directory ${dir} not found. Run "bun run build" first.`);
+    } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === 'ENOENT') {
+            console.error(`❌ Directory ${dir} not found. Run "bun run build" first.`);
+            failed = true;
+            continue;
+        }
+
+        throw error;
     }
 }
 

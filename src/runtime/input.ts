@@ -50,6 +50,7 @@ export class InputController {
 
         this.lockPointer = this.lockPointer.bind(this);
         this.onPointerLockChange = this.onPointerLockChange.bind(this);
+        this.onWindowBlur = this.onWindowBlur.bind(this);
         this.onKeyDown = this.onKeyDown.bind(this);
         this.onKeyUp = this.onKeyUp.bind(this);
         this.onMouseMove = this.onMouseMove.bind(this);
@@ -58,6 +59,7 @@ export class InputController {
 
         this.domElement.addEventListener('click', this.lockPointer);
         document.addEventListener('pointerlockchange', this.onPointerLockChange);
+        window.addEventListener('blur', this.onWindowBlur);
         window.addEventListener('keydown', this.onKeyDown);
         window.addEventListener('keyup', this.onKeyUp);
         document.addEventListener('mousemove', this.onMouseMove);
@@ -71,6 +73,13 @@ export class InputController {
 
     private onPointerLockChange() {
         this.isPointerLocked = document.pointerLockElement === this.domElement;
+        if (!this.isPointerLocked) {
+            this.resetInputState();
+        }
+    }
+
+    private onWindowBlur() {
+        this.resetInputState();
     }
 
     private onKeyDown(event: KeyboardEvent) {
@@ -188,13 +197,27 @@ export class InputController {
         return movement;
     }
 
+    private resetInputState() {
+        this.keys = createDefaultKeyState();
+        this.previousKeys = createDefaultKeyState();
+        this.keyPresses = createDefaultKeyState();
+        this.keyReleases = createDefaultKeyState();
+        this.mouseButtons.clear();
+        this.mouseMovement = { x: 0, y: 0 };
+    }
+
     debugSetPointerLockState(locked: boolean) {
         this.isPointerLocked = locked;
+    }
+
+    debugGetPointerLockState() {
+        return this.isPointerLocked;
     }
 
     dispose() {
         this.domElement.removeEventListener('click', this.lockPointer);
         document.removeEventListener('pointerlockchange', this.onPointerLockChange);
+        window.removeEventListener('blur', this.onWindowBlur);
         window.removeEventListener('keydown', this.onKeyDown);
         window.removeEventListener('keyup', this.onKeyUp);
         document.removeEventListener('mousemove', this.onMouseMove);

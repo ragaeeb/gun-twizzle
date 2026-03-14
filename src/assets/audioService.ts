@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { AudioManager } from './gameAssets';
 
 const POOL_SIZE = 8; // per sound family
 
@@ -10,19 +11,31 @@ type SoundPool = {
 export class AudioService {
     private listener: THREE.AudioListener | null = null;
     private context: AudioContext | null = null;
+    private attachedCamera: THREE.Camera | null = null;
     private buffers = new Map<string, AudioBuffer>();
     private pools = new Map<string, SoundPool>();
+    private activeGlobal = new Set<THREE.Audio>();
     private isReady = false;
 
     /** Call once, from a user gesture or loading transition. */
     init(camera: THREE.Camera): void {
-        this.listener = new THREE.AudioListener();
+        if (this.isReady && this.listener && this.attachedCamera === camera) {
+            return;
+        }
+
+        if (!this.listener) {
+            this.listener = new THREE.AudioListener();
+        } else if (this.listener.parent) {
+            this.listener.parent.remove(this.listener);
+        }
+
         camera.add(this.listener);
+        this.attachedCamera = camera;
         this.context = this.listener.context;
 
         // Ensure low latency
         if (this.context.state === 'suspended') {
-            this.context.resume();
+            void this.context.resume().catch(() => {});
         }
 
         this.isReady = true;
@@ -30,6 +43,7 @@ export class AudioService {
 
     /** Warm up the AudioContext. Call from the first user click/interaction. */
     warmup(): void {
+        AudioManager.warmup();
         if (this.context?.state === 'suspended') {
             this.context.resume();
         }
@@ -75,6 +89,7 @@ export class AudioService {
         audio.setRolloffFactor(2);
         audio.setVolume(volume);
         audio.position.set(position.x, position.y, position.z);
+        audio.updateMatrixWorld(true);
         audio.play();
     }
 
@@ -89,11 +104,13 @@ export class AudioService {
         }
 
         const audio = new THREE.Audio(this.listener);
+        this.activeGlobal.add(audio);
         audio.setBuffer(buffer);
         audio.setVolume(volume);
         audio.play();
         audio.onEnded = () => {
             audio.disconnect();
+            this.activeGlobal.delete(audio);
         };
     }
 
@@ -114,6 +131,13 @@ export class AudioService {
     }
 
     dispose(): void {
+        for (const audio of this.activeGlobal) {
+            if (audio.isPlaying) {
+                audio.stop();
+            }
+            audio.disconnect();
+        }
+        this.activeGlobal.clear();
         for (const [, pool] of this.pools) {
             for (const source of pool.sources) {
                 if (source.isPlaying) {
@@ -127,6 +151,7 @@ export class AudioService {
         if (this.listener) {
             this.listener.parent?.remove(this.listener);
         }
+        this.attachedCamera = null;
         this.isReady = false;
     }
 }

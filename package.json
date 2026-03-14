@@ -57,7 +57,7 @@
     "scripts": {
         "assets:optimize": "bun scripts/optimize-assets.ts",
         "build": "tsc --noEmit && vite build && bun scripts/check-budgets.ts",
-        "build:prod": "bun scripts/optimize-assets.ts && tsc --noEmit && vite build",
+        "build:prod": "bun scripts/optimize-assets.ts && tsc --noEmit && vite build && bun scripts/check-budgets.ts",
         "dev": "vite",
         "dev:server": "bun run server/main.ts",
         "format": "biome format . --write",

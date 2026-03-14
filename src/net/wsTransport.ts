@@ -31,7 +31,7 @@ export const createWsTransport = (options: WsTransportOptions): WsTransport => {
     const { url, onOpen, onClose, onError, onMessage, maxReconnectAttempts = 5, reconnectDelayMs = 2000 } = options;
 
     let ws: WebSocket | null = null;
-    let closed = false;
+    let shouldReconnect = true;
     let reconnectAttempts = 0;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -43,7 +43,7 @@ export const createWsTransport = (options: WsTransportOptions): WsTransport => {
     };
 
     const attemptReconnect = () => {
-        if (closed || reconnectAttempts >= maxReconnectAttempts) {
+        if (!shouldReconnect || reconnectAttempts >= maxReconnectAttempts) {
             return;
         }
         reconnectAttempts += 1;
@@ -55,9 +55,10 @@ export const createWsTransport = (options: WsTransportOptions): WsTransport => {
 
     const connect = () => {
         cleanup();
-        if (closed) {
+        if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
             return;
         }
+        shouldReconnect = true;
 
         ws = new WebSocket(url);
 
@@ -80,7 +81,7 @@ export const createWsTransport = (options: WsTransportOptions): WsTransport => {
 
         ws.onclose = () => {
             onClose?.();
-            if (!closed) {
+            if (shouldReconnect) {
                 attemptReconnect();
             }
         };
@@ -92,7 +93,8 @@ export const createWsTransport = (options: WsTransportOptions): WsTransport => {
 
     return {
         close: () => {
-            closed = true;
+            shouldReconnect = false;
+            reconnectAttempts = 0;
             cleanup();
             ws?.close();
             ws = null;

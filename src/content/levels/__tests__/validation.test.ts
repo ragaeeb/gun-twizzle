@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { EnemyId } from '../../enemies/definitions';
 import { LEVEL_1 } from '../level1';
 import { LEVEL_2 } from '../level2';
 import { LEVEL_3 } from '../level3';
 import { LEVEL_4 } from '../level4';
-import { validateLevelDef } from '../validation';
+import type { LevelDef } from '../types';
+import { type ValidationError, validateLevelDef } from '../validation';
 
 describe('Level validation', () => {
     it('Level 1 passes validation', () => {
@@ -27,9 +29,9 @@ describe('Level validation', () => {
     });
 
     it('detects unknown enemy def', () => {
-        const badLevel = {
+        const badLevel: LevelDef = {
             ...LEVEL_1,
-            enemies: [{ enemyDefId: 'alien', position: { x: 0, y: 0, z: 0 } }],
+            enemies: [{ enemyDefId: 'alien' as EnemyId, position: { x: 0, y: 0, z: 0 } }],
         };
         const errors = validateLevelDef(badLevel);
         expect(errors.length).toBeGreaterThan(0);
@@ -37,7 +39,7 @@ describe('Level validation', () => {
     });
 
     it('detects duplicate spawn IDs', () => {
-        const badLevel = {
+        const badLevel: LevelDef = {
             ...LEVEL_1,
             enemies: [
                 { enemyDefId: 'grunt', position: { x: 0, y: 0, z: 0 }, spawnId: 'boss' },
@@ -45,12 +47,12 @@ describe('Level validation', () => {
             ],
         };
         const errors = validateLevelDef(badLevel);
-        expect(errors.some((e: { message: string }) => e.message.includes('Duplicate'))).toBe(true);
+        expect(errors.some((e: ValidationError) => e.message.includes('Duplicate'))).toBe(true);
     });
 
     it('detects missing mission objectives', () => {
-        const badLevel = { ...LEVEL_1, missions: [] };
+        const badLevel: LevelDef = { ...LEVEL_1, missions: [] };
         const errors = validateLevelDef(badLevel);
-        expect(errors.some((e: { field: string }) => e.field === 'missions')).toBe(true);
+        expect(errors.some((e: ValidationError) => e.field === 'missions')).toBe(true);
     });
 });

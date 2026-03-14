@@ -1,11 +1,17 @@
 import { expect, type Page, test } from '@playwright/test';
 
-const VIEW_CLIP = {
-    height: 540,
-    width: 600,
-    x: 680,
-    y: 180,
-} as const;
+type DebugApi = {
+    getWeaponAnimations?: () => Array<{ name: string; duration: number }>;
+    getWeaponTransform?: () => {
+        currentWeaponId: string | null;
+        position: [number, number, number];
+        rotation: [number, number, number];
+        scale: number;
+    } | null;
+    setPointerLockState?: (locked: boolean) => void;
+};
+
+type WindowWithDebug = Window & { __gtDebug?: DebugApi };
 
 const waitForGameReady = async (page: Page) => {
     const canvas = page.locator('canvas').first();
@@ -44,6 +50,26 @@ const unlockShooterInput = async (page: Page) => {
     await page.waitForTimeout(150);
 };
 
+const forcePointerLock = async (page: Page) => {
+    await page.waitForFunction(() => {
+        const debug = (window as WindowWithDebug).__gtDebug;
+        return Boolean(debug?.setPointerLockState);
+    });
+    await page.evaluate(() => {
+        const debug = (window as WindowWithDebug).__gtDebug;
+        debug?.setPointerLockState?.(true);
+    });
+    await page.waitForTimeout(100);
+};
+
+const waitForWeaponAnimations = async (page: Page) => {
+    await page.waitForFunction(() => {
+        const debug = (window as WindowWithDebug).__gtDebug;
+        const animations = debug?.getWeaponAnimations?.();
+        return Array.isArray(animations) && animations.length > 0;
+    });
+};
+
 const setWeapon = async (page: Page, weaponId: 'AK47' | 'Knife' | 'Usp') => {
     await page.waitForFunction(() => Boolean((window as Window & { __gtDebug?: unknown }).__gtDebug));
     await page.evaluate(async (id) => {
@@ -54,11 +80,15 @@ const setWeapon = async (page: Page, weaponId: 'AK47' | 'Knife' | 'Usp') => {
         ).__gtDebug;
         await debug?.setWeapon?.(id);
     }, weaponId);
-    await page.waitForTimeout(150);
+    await page.waitForFunction((id) => {
+        const debug = (window as WindowWithDebug).__gtDebug;
+        const state = debug?.getWeaponTransform?.();
+        return state?.currentWeaponId === id;
+    }, weaponId);
 };
 
 const poseClip = async (page: Page, clipName: string, time: number) => {
-    await page.evaluate(
+    const posed = await page.evaluate(
         ({ clipName: nextClipName, time: nextTime }) => {
             const debug = (
                 window as Window & {
@@ -67,11 +97,11 @@ const poseClip = async (page: Page, clipName: string, time: number) => {
                     };
                 }
             ).__gtDebug;
-            debug?.poseWeaponClip?.(nextClipName, nextTime);
+            return debug?.poseWeaponClip?.(nextClipName, nextTime) ?? false;
         },
         { clipName, time },
     );
-    await page.waitForTimeout(100);
+    return posed;
 };
 
 const setTransform = async (
@@ -82,7 +112,7 @@ const setTransform = async (
         scale: number;
     },
 ) => {
-    await page.evaluate((nextTransform) => {
+    const state = await page.evaluate((nextTransform) => {
         const debug = (
             window as Window & {
                 __gtDebug?: {
@@ -91,12 +121,45 @@ const setTransform = async (
                         rotation?: [number, number, number];
                         scale?: number;
                     }) => void;
+                    getWeaponTransform?: () => {
+                        currentWeaponId: string | null;
+                        position: [number, number, number];
+                        rotation: [number, number, number];
+                        scale: number;
+                    } | null;
                 };
             }
         ).__gtDebug;
         debug?.setWeaponTransform?.(nextTransform);
+        return debug?.getWeaponTransform?.() ?? null;
     }, transform);
-    await page.waitForTimeout(100);
+    return state;
+};
+
+const expectTransformMatch = (
+    state: {
+        position: [number, number, number];
+        rotation: [number, number, number];
+        scale: number;
+    } | null,
+    transform: {
+        position: [number, number, number];
+        rotation: [number, number, number];
+        scale: number;
+    },
+) => {
+    expect(state).not.toBeNull();
+    if (!state) {
+        return;
+    }
+
+    for (const [index, value] of transform.position.entries()) {
+        expect(state.position[index]).toBeCloseTo(value, 3);
+    }
+    for (const [index, value] of transform.rotation.entries()) {
+        expect(state.rotation[index]).toBeCloseTo(value, 3);
+    }
+    expect(state.scale).toBeCloseTo(transform.scale, 3);
 };
 
 test.describe.configure({ timeout: 120_000 });
@@ -105,8 +168,11 @@ test('inspect AK and knife forward stances', async ({ page }) => {
     await page.goto('/?e2e=1');
     await selectLevel(page, 'The Compound');
     await unlockShooterInput(page);
+    await forcePointerLock(page);
+    await waitForWeaponAnimations(page);
 
     await setWeapon(page, 'AK47');
+    await waitForWeaponAnimations(page);
     const akCandidates = [
         ['RIG_UE5_Comando_AK_Hold', 0.1],
         ['RIG_UE5_Comando_AK_Idle', 0.1],
@@ -116,11 +182,8 @@ test('inspect AK and knife forward stances', async ({ page }) => {
     ] as const;
 
     for (const [clipName, time] of akCandidates) {
-        await poseClip(page, clipName, time);
-        await page.screenshot({
-            clip: VIEW_CLIP,
-            path: `/tmp/${clipName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.png`,
-        });
+        const posed = await poseClip(page, clipName, time);
+        expect(posed).toBe(true);
     }
 
     const akTransformCandidates = [
@@ -190,23 +253,17 @@ test('inspect AK and knife forward stances', async ({ page }) => {
         },
     ] as const;
 
-    await poseClip(page, 'RIG_UE5_Comando_AK_Idle_Aim', 0.1);
+    expect(await poseClip(page, 'RIG_UE5_Comando_AK_Idle_Aim', 0.1)).toBe(true);
     for (const candidate of akTransformCandidates) {
-        await setTransform(page, candidate.transform);
-        await page.screenshot({
-            clip: VIEW_CLIP,
-            path: `/tmp/${candidate.name}.png`,
-        });
+        const state = await setTransform(page, candidate.transform);
+        expectTransformMatch(state, candidate.transform);
     }
 
     await setWeapon(page, 'Knife');
+    await waitForWeaponAnimations(page);
     const knifeTimes = [0, 0.4, 0.8, 1.2, 1.6, 2, 2.4, 2.8, 3.2, 3.6, 4, 4.4] as const;
     for (const time of knifeTimes) {
-        await poseClip(page, 'allanims', time);
-        await page.screenshot({
-            clip: VIEW_CLIP,
-            path: `/tmp/knife-allanims-${String(time).replace('.', '_')}.png`,
-        });
+        expect(await poseClip(page, 'allanims', time)).toBe(true);
     }
 
     const knifeTransformCandidates = [
@@ -285,11 +342,8 @@ test('inspect AK and knife forward stances', async ({ page }) => {
     ] as const;
 
     for (const candidate of knifeTransformCandidates) {
-        await poseClip(page, 'allanims', candidate.time);
-        await setTransform(page, candidate.transform);
-        await page.screenshot({
-            clip: VIEW_CLIP,
-            path: `/tmp/${candidate.name}.png`,
-        });
+        expect(await poseClip(page, 'allanims', candidate.time)).toBe(true);
+        const state = await setTransform(page, candidate.transform);
+        expectTransformMatch(state, candidate.transform);
     }
 });

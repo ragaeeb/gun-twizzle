@@ -69,7 +69,7 @@ const updateHealthBar = (
         return;
     }
 
-    const ratio = Math.max(0, health.current / health.max);
+    const ratio = health.max > 0 ? Math.max(0, Math.min(1, health.current / health.max)) : 0;
     fill.scale.x = ratio;
     fill.position.x = (ratio - 1) * 0.5;
 
@@ -96,7 +96,8 @@ const updateHealthBar = (
  */
 export const EnemyEntity = ({ entityId, world }: EnemyEntityProps) => {
     const groupRef = useRef<THREE.Group>(null);
-    const materialRef = useRef<THREE.MeshStandardMaterial>(null);
+    const bodyMaterialRef = useRef<THREE.MeshStandardMaterial>(null);
+    const headMaterialRef = useRef<THREE.MeshStandardMaterial>(null);
     const healthBarFillRef = useRef<THREE.Mesh>(null);
     const healthBarGroupRef = useRef<THREE.Group>(null);
 
@@ -125,7 +126,8 @@ export const EnemyEntity = ({ entityId, world }: EnemyEntityProps) => {
         }
 
         updateGroupTransform(groupRef.current, transform, ai);
-        updateMaterialColor(materialRef.current, ai);
+        updateMaterialColor(bodyMaterialRef.current, ai);
+        updateMaterialColor(headMaterialRef.current, ai);
         updateHealthBar(healthBarFillRef.current, healthBarGroupRef.current, health, ai, state.camera);
     });
 
@@ -134,12 +136,12 @@ export const EnemyEntity = ({ entityId, world }: EnemyEntityProps) => {
             {/* Body — capsule approximation with cylinder + spheres */}
             <mesh position={[0, 1, 0]} castShadow receiveShadow>
                 <cylinderGeometry args={[0.4, 0.4, 1.6, 8]} />
-                <meshStandardMaterial ref={materialRef} color={ENEMY_COLOR_IDLE} roughness={0.7} />
+                <meshStandardMaterial ref={bodyMaterialRef} color={ENEMY_COLOR_IDLE} roughness={0.7} />
             </mesh>
             {/* Head */}
             <mesh position={[0, 2, 0]} castShadow>
                 <sphereGeometry args={[0.3, 8, 6]} />
-                <meshStandardMaterial color={ENEMY_COLOR_IDLE} roughness={0.7} />
+                <meshStandardMaterial ref={headMaterialRef} color={ENEMY_COLOR_IDLE} roughness={0.7} />
             </mesh>
             {/* Health bar — floats above head */}
             <group ref={healthBarGroupRef} position={[0, 2.7, 0]}>

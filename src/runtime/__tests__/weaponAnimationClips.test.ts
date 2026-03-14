@@ -1,5 +1,5 @@
 import { AnimationClip, NumberKeyframeTrack, QuaternionKeyframeTrack, VectorKeyframeTrack } from 'three';
-
+import { describe, expect, it } from 'vitest';
 import { prepareWeaponAnimationClips } from '../weaponAnimationClips';
 
 const createClip = () =>

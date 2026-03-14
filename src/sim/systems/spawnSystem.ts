@@ -1,4 +1,4 @@
-import type { EnemyDef } from '../../content/enemies/definitions';
+import type { EnemyDef, EnemyId } from '../../content/enemies/definitions';
 import type { World } from '../world';
 import { addTag, createEntity, type EntityId } from '../world';
 
@@ -7,8 +7,10 @@ export const spawnEnemy = (
     enemyDef: EnemyDef,
     position: { x: number; y: number; z: number },
     patrolPath?: Array<{ x: number; y: number; z: number }>,
+    spawnId?: string,
 ): EntityId => {
     const id = createEntity(world);
+    const normalizedPatrolPath = patrolPath?.map((point) => ({ ...point })) ?? [];
 
     world.transform.set(id, {
         position: { ...position },
@@ -25,10 +27,11 @@ export const spawnEnemy = (
 
     world.ai.set(id, {
         attackCooldown: 0,
-        enemyDefId: enemyDef.id,
+        enemyDefId: enemyDef.id as EnemyId,
         patrolIndex: 0,
-        patrolPath: patrolPath ?? [],
-        state: patrolPath ? 'patrol' : 'idle',
+        patrolPath: normalizedPatrolPath,
+        spawnId: spawnId ?? null,
+        state: normalizedPatrolPath.length > 0 ? 'patrol' : 'idle',
         targetEntityId: null,
     });
 

@@ -49,6 +49,7 @@ const setupLevel = () => {
             enemyDefId: 'grunt',
             patrolIndex: 0,
             patrolPath: [],
+            spawnId: null,
             state: 'idle',
             targetEntityId: null,
         });
@@ -98,27 +99,30 @@ describe('kill counting (regression)', () => {
 
     it('mission requires all 3 kills, not 2', () => {
         const { enemy1, enemy2, enemy3, playerId, world } = setupLevel();
-        const mission = createMissionState('eliminate', 3);
+        const mission = createMissionState({ params: { count: 3 }, type: 'kill_count' });
 
         // Kill enemy 1
         const events1: SimEvent[] = [];
         killEnemy(world, playerId, enemy1, events1);
-        missionSystem(mission, events1, events1);
-        expect(mission.killCount).toBe(1);
+        const out1: SimEvent[] = [];
+        missionSystem(mission, events1, out1, 1 / 60);
+        expect(mission.progress).toBe(1);
         expect(mission.isComplete).toBe(false);
 
         // Kill enemy 2
         const events2: SimEvent[] = [];
         killEnemy(world, playerId, enemy2, events2);
-        missionSystem(mission, events2, events2);
-        expect(mission.killCount).toBe(2);
+        const out2: SimEvent[] = [];
+        missionSystem(mission, events2, out2, 1 / 60);
+        expect(mission.progress).toBe(2);
         expect(mission.isComplete).toBe(false);
 
         // Kill enemy 3
         const events3: SimEvent[] = [];
         killEnemy(world, playerId, enemy3, events3);
-        missionSystem(mission, events3, events3);
-        expect(mission.killCount).toBe(3);
+        const out3: SimEvent[] = [];
+        missionSystem(mission, events3, out3, 1 / 60);
+        expect(mission.progress).toBe(3);
         expect(mission.isComplete).toBe(true);
     });
 });

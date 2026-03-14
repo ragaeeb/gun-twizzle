@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { AssetManager, AudioManager } from '../assets/gameAssets';
 import { validateLoaderPrerequisites } from '../assets/loaders';
 import { ENEMY_REGISTRY } from '../content/enemies/definitions';
-import type { LevelDef } from '../content/levels/types';
+import type { LevelDef, PickupId } from '../content/levels/types';
 import type { SerializedInput, WorldSnapshot } from '../net/protocol';
 import type { NetSession } from '../net/session';
 import type { FpsCamera, GameScene } from '../render/scene';
@@ -80,6 +80,7 @@ export class GameEngine {
     private lastPlayerHealth: number | null = null;
     private readonly playerSpawnPosition: THREE.Vector3;
     private readonly cameraQuat = new THREE.Quaternion();
+    private readonly camDir = new THREE.Vector3();
 
     // Multiplayer (null = offline mode, present = online mode)
     private netSession: NetSession | null = null;
@@ -98,7 +99,14 @@ export class GameEngine {
         this.clock = createClock(60);
         this.eventQueue = createEventQueue();
         this.world = createWorld();
-        this.missionState = createMissionState('eliminate', options.levelDef.enemies.length);
+        const firstMission = options.levelDef.missions[0];
+        const mission =
+            firstMission ??
+            ({
+                params: { count: options.levelDef.enemies.length },
+                type: 'kill_count',
+            } as LevelDef['missions'][number]);
+        this.missionState = createMissionState(mission);
         this.playerSpawnPosition = new THREE.Vector3(
             options.levelDef.playerSpawn.x,
             options.levelDef.playerSpawn.y,
@@ -161,9 +169,13 @@ export class GameEngine {
         this.input?.debugSetPointerLockState(locked);
     }
 
+    debugGetPointerLockState() {
+        return this.input?.debugGetPointerLockState() ?? false;
+    }
+
     /** Pickup entity IDs with pickup type info for rendering. */
-    getPickupEntities(): Array<{ entityId: EntityId; pickupId: string }> {
-        const result: Array<{ entityId: EntityId; pickupId: string }> = [];
+    getPickupEntities(): Array<{ entityId: EntityId; pickupId: PickupId }> {
+        const result: Array<{ entityId: EntityId; pickupId: PickupId }> = [];
         for (const [id, pickup] of this.world.pickup.entries()) {
             result.push({ entityId: id, pickupId: pickup.pickupId });
         }
@@ -226,10 +238,10 @@ export class GameEngine {
         });
         this.world.weaponOwner.set(id, {
             ammo: {
+                ak47: { magazine: 30, reserve: 90 },
                 knife: { magazine: 1, reserve: 0 },
-                rifle: { magazine: 30, reserve: 90 },
             },
-            equippedWeaponId: 'rifle',
+            equippedWeaponId: 'ak47',
         });
         addTag(this.world, id, 'player');
     }
@@ -243,7 +255,7 @@ export class GameEngine {
             if (!def) {
                 continue;
             }
-            const id = spawnEnemy(this.world, def, enemySpawn.position, enemySpawn.patrolPath);
+            const id = spawnEnemy(this.world, def, enemySpawn.position, enemySpawn.patrolPath, enemySpawn.spawnId);
             this.enemyEntityIds.push(id);
 
             // Boss: double health
@@ -356,6 +368,7 @@ export class GameEngine {
         for (let i = 0; i < steps; i++) {
             this.simulationTick(this.clock.dt);
             swapEventBuffers(this.eventQueue);
+            this.processEvents();
         }
 
         // Visual-only updates run once per render frame
@@ -363,9 +376,6 @@ export class GameEngine {
         this.camera.update(delta);
         this.scene.update(delta, this.camera);
         this.weaponSystem.update(delta, mouseMovement);
-
-        // Consume events from the last sim tick
-        this.processEvents();
 
         this.updateHud();
     }
@@ -617,8 +627,9 @@ export class GameEngine {
             });
         }
 
+        const inEvents = outEvents.slice();
         const damageEvents: DamageEvent[] = [];
-        for (const event of outEvents) {
+        for (const event of inEvents) {
             if (event.type === 'damage') {
                 damageEvents.push(event);
             }
@@ -637,7 +648,8 @@ export class GameEngine {
         });
 
         this.profileSystem('sim:mission', () => {
-            missionSystem(this.missionState, outEvents, outEvents);
+            const missionEvents = outEvents.slice();
+            missionSystem(this.missionState, missionEvents, outEvents, dt);
         });
     }
 
@@ -723,8 +735,7 @@ export class GameEngine {
      * Called when the player fires a weapon.
      */
     private checkEnemyHits(outEvents: SimEvent[]) {
-        const camDir = new THREE.Vector3();
-        this.camera.getWorldDirection(camDir);
+        this.camera.getWorldDirection(this.camDir);
         const weaponId = this.player?.getCurrentWeaponId();
         if (!weaponId) {
             return;
@@ -734,7 +745,7 @@ export class GameEngine {
         const hit = findClosestEnemyHit(
             this.world,
             { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z },
-            { x: camDir.x, y: camDir.y, z: camDir.z },
+            { x: this.camDir.x, y: this.camDir.y, z: this.camDir.z },
             weaponId,
         );
         const damageEvent = hit ? processHitScanResult(hit, simWeaponDef) : null;
@@ -859,7 +870,28 @@ export class GameEngine {
         if (this.missionState.isComplete) {
             missionText = '✓ Mission Complete';
         } else {
-            missionText = `Eliminate hostiles: ${this.missionState.killCount}/${this.missionState.targetCount}`;
+            switch (this.missionState.mission.type) {
+                case 'kill_count':
+                    missionText = `Eliminate hostiles: ${this.missionState.progress}/${this.missionState.mission.params.count}`;
+                    break;
+                case 'kill_target':
+                    missionText = `Eliminate target: ${this.missionState.progress}/1`;
+                    break;
+                case 'survive_timer': {
+                    const remainingSeconds = Math.max(
+                        0,
+                        this.missionState.mission.params.durationSeconds - this.missionState.elapsedSeconds,
+                    );
+                    missionText = `Survive: ${Math.ceil(remainingSeconds)}s`;
+                    break;
+                }
+                case 'reach_trigger':
+                    missionText = 'Reach the objective';
+                    break;
+                default:
+                    missionText = '';
+                    break;
+            }
         }
 
         return {

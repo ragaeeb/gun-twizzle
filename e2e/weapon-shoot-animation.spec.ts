@@ -2,6 +2,13 @@ import { expect, type Page, test } from '@playwright/test';
 
 test.describe.configure({ timeout: 90_000 });
 
+const WEAPON_VIEW_CLIP = {
+    height: 540,
+    width: 600,
+    x: 680,
+    y: 180,
+} as const;
+
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
         let audioStartCount = 0;
@@ -18,6 +25,13 @@ test.beforeEach(async ({ page }) => {
         };
     });
 });
+
+type DebugApi = {
+    getWeaponAnimations?: () => Array<{ name: string; duration: number }>;
+    setPointerLockState?: (locked: boolean) => void;
+};
+
+type WindowWithDebug = Window & { __gtDebug?: DebugApi };
 
 const waitForGameReady = async (page: Page) => {
     const canvas = page.locator('canvas').first();
@@ -64,6 +78,37 @@ const unlockShooterInput = async (page: Page) => {
     });
 };
 
+const forcePointerLock = async (page: Page) => {
+    await page.waitForFunction(() => {
+        const debug = (window as WindowWithDebug).__gtDebug;
+        return Boolean(debug?.setPointerLockState);
+    });
+    await page.evaluate(() => {
+        const debug = (window as WindowWithDebug).__gtDebug;
+        debug?.setPointerLockState?.(true);
+    });
+    await page.waitForTimeout(100);
+};
+
+const waitForWeaponAnimations = async (page: Page) => {
+    await page.waitForFunction(() => {
+        const debug = (window as WindowWithDebug).__gtDebug;
+        const animations = debug?.getWeaponAnimations?.();
+        return Array.isArray(animations) && animations.length > 0;
+    });
+};
+
+const waitForAmmoReady = async (page: Page) => {
+    await page.waitForFunction(() => {
+        const ammoText = document.querySelector('.weapon-ammo-current')?.textContent;
+        if (!ammoText) {
+            return false;
+        }
+        const ammo = Number(ammoText.trim());
+        return Number.isFinite(ammo) && ammo > 0;
+    });
+};
+
 const fireShot = async (page: Page, unlockInput = true) => {
     const ammoBefore = await getCurrentAmmo(page);
     if (unlockInput) {
@@ -71,7 +116,8 @@ const fireShot = async (page: Page, unlockInput = true) => {
     }
 
     await page.evaluate(() => {
-        document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+        const canvas = document.querySelector('canvas');
+        canvas?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
     });
 
     try {
@@ -81,11 +127,12 @@ const fireShot = async (page: Page, unlockInput = true) => {
                 return ammoText ? Number(ammoText.trim()) < before : false;
             },
             ammoBefore,
-            { timeout: 1_500 },
+            { timeout: 5_000 },
         );
     } finally {
         await page.evaluate(() => {
-            document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+            const canvas = document.querySelector('canvas');
+            canvas?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
         });
     }
 
@@ -100,6 +147,9 @@ test.describe('USP Shoot Animation', () => {
         await page.goto('/?e2e=1');
         await selectLevel(page, 'The Compound');
         await unlockShooterInput(page);
+        await forcePointerLock(page);
+        await waitForWeaponAnimations(page);
+        await waitForAmmoReady(page);
         await page.waitForTimeout(150);
         const audioStartsBeforeShot = await getAudioStartCount(page);
         await fireShot(page, false);
@@ -107,7 +157,8 @@ test.describe('USP Shoot Animation', () => {
         await page.waitForTimeout(240);
 
         await expect(page).toHaveScreenshot('weapon-usp-shoot.png', {
-            maxDiffPixelRatio: 0.3,
+            clip: WEAPON_VIEW_CLIP,
+            maxDiffPixelRatio: 0.1,
         });
     });
 });

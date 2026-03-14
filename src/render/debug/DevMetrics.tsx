@@ -12,7 +12,10 @@ const LOG_INTERVAL_SECONDS = 5;
  */
 export const DevMetrics = () => {
     const { gl } = useThree();
-    const frameTimeSamples = useRef<number[]>([]);
+    const frameTimeSamples = useRef<number[]>(Array.from({ length: MAX_FRAME_SAMPLES }, () => 0));
+    const orderedSamples = useRef<number[]>([]);
+    const sampleIndex = useRef(0);
+    const sampleCount = useRef(0);
     const lastLogTime = useRef(0);
 
     useEffect(() => {
@@ -64,12 +67,21 @@ export const DevMetrics = () => {
         }
 
         const samples = frameTimeSamples.current;
-        samples.push(delta * 1000);
-        if (samples.length > MAX_FRAME_SAMPLES) {
-            samples.shift();
+        const value = delta * 1000;
+        samples[sampleIndex.current] = value;
+        sampleIndex.current = (sampleIndex.current + 1) % MAX_FRAME_SAMPLES;
+        sampleCount.current = Math.min(sampleCount.current + 1, MAX_FRAME_SAMPLES);
+
+        const count = sampleCount.current;
+        const writeIndex = sampleIndex.current;
+        const ordered = orderedSamples.current;
+        for (let i = 0; i < count; i += 1) {
+            const sourceIndex = (writeIndex - count + i + MAX_FRAME_SAMPLES) % MAX_FRAME_SAMPLES;
+            ordered[i] = samples[sourceIndex] ?? 0;
         }
+        ordered.length = count;
         // biome-ignore lint/suspicious/noExplicitAny: window accessor for E2E tests
-        (window as any).__FRAME_TIME_SAMPLES__ = samples;
+        (window as any).__FRAME_TIME_SAMPLES__ = ordered;
 
         const elapsed = state.clock.elapsedTime;
         if (elapsed - lastLogTime.current >= LOG_INTERVAL_SECONDS) {

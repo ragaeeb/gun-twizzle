@@ -94,16 +94,7 @@ export type RemotePlayerState = {
     position: [number, number, number];
     rotation: [number, number, number, number];
     stance: string;
-    weaponId: string;
+    weaponId: WeaponId;
 };
 
-export type NetEvent =
-    | { type: 'player:join'; id: string }
-    | { type: 'player:leave'; id: string }
-    | {
-          type: 'player:state';
-          id: string;
-          position: [number, number, number];
-          rotation: [number, number, number, number];
-      }
-    | { type: 'weapon:fire'; id: string; weaponId: WeaponId };
+export type { NetEvent } from '../net/types';

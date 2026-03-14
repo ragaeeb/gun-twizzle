@@ -1,6 +1,9 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
-describe('BulletHoleSystem ring buffer', () => {
+import { BillboardParticleSystem } from '../src/render/effects';
+
+describe('Ring buffer algorithm', () => {
     const MAX_DECALS = 50;
 
     it('wraps index at max capacity', () => {
@@ -30,40 +33,66 @@ describe('BillboardParticleSystem max cap', () => {
     const MAX_PARTICLES = 100;
 
     it('rejects particles beyond max capacity', () => {
-        let particleCount = 0;
-        const addParticle = () => {
-            if (particleCount >= MAX_PARTICLES) {
-                return false;
-            }
-            particleCount += 1;
-            return true;
-        };
+        const parent = new THREE.Object3D();
+        const texture = new THREE.Texture();
+        const system = new BillboardParticleSystem(parent, texture, MAX_PARTICLES, THREE.NormalBlending);
 
         for (let i = 0; i < MAX_PARTICLES; i++) {
-            expect(addParticle()).toBe(true);
+            system.addParticle({
+                duration: 1000,
+                initialOpacity: 1,
+                position: new THREE.Vector3(),
+                rotation: 0,
+                scale: 1,
+                startTime: 0,
+                velocity: new THREE.Vector3(),
+            });
         }
 
-        expect(addParticle()).toBe(false);
-        expect(particleCount).toBe(MAX_PARTICLES);
+        system.addParticle({
+            duration: 1000,
+            initialOpacity: 1,
+            position: new THREE.Vector3(),
+            rotation: 0,
+            scale: 1,
+            startTime: 0,
+            velocity: new THREE.Vector3(),
+        });
+
+        expect(system.count).toBe(MAX_PARTICLES);
     });
 
     it('accepts particles again after removal', () => {
-        let particleCount = MAX_PARTICLES;
-        const removeExpired = (count: number) => {
-            particleCount = Math.max(0, particleCount - count);
-        };
-        const addParticle = () => {
-            if (particleCount >= MAX_PARTICLES) {
-                return false;
-            }
-            particleCount += 1;
-            return true;
-        };
+        const parent = new THREE.Object3D();
+        const texture = new THREE.Texture();
+        const system = new BillboardParticleSystem(parent, texture, MAX_PARTICLES, THREE.NormalBlending);
 
-        expect(addParticle()).toBe(false);
-        removeExpired(10);
-        expect(addParticle()).toBe(true);
-        expect(particleCount).toBe(MAX_PARTICLES - 10 + 1);
+        for (let i = 0; i < 10; i++) {
+            system.addParticle({
+                duration: 1,
+                initialOpacity: 1,
+                position: new THREE.Vector3(),
+                rotation: 0,
+                scale: 1,
+                startTime: 0,
+                velocity: new THREE.Vector3(),
+            });
+        }
+
+        expect(system.count).toBe(10);
+        system.removeExpiredParticles(10);
+        expect(system.count).toBe(0);
+
+        system.addParticle({
+            duration: 1000,
+            initialOpacity: 1,
+            position: new THREE.Vector3(),
+            rotation: 0,
+            scale: 1,
+            startTime: 10,
+            velocity: new THREE.Vector3(),
+        });
+        expect(system.count).toBe(1);
     });
 });
 

@@ -71,7 +71,7 @@ describe('World', () => {
         addTag(world, b, 'enemy');
         addTag(world, c, 'player');
 
-        const enemies = getEntitiesWithTag(world, 'enemy');
+        const enemies = Array.from(getEntitiesWithTag(world, 'enemy'));
         expect(enemies).toHaveLength(2);
         expect(enemies).toContain(a);
         expect(enemies).toContain(b);
@@ -80,7 +80,7 @@ describe('World', () => {
     it('getEntitiesWithTag returns empty for unknown tag', () => {
         const world = createWorld();
         createEntity(world);
-        expect(getEntitiesWithTag(world, 'nonexistent')).toHaveLength(0);
+        expect(Array.from(getEntitiesWithTag(world, 'nonexistent'))).toHaveLength(0);
     });
 
     it('ComponentStore.entries yields only populated entries', () => {

@@ -2,7 +2,6 @@ import type { RefObject } from 'react';
 import { useEffect, useState } from 'react';
 
 import { audioService } from '../assets/audioService';
-import { AudioManager } from '../assets/gameAssets';
 
 const CONTROL_GROUPS = [
     {
@@ -31,13 +30,21 @@ type PointerLockOverlayProps = {
 };
 
 export const PointerLockOverlay = ({ canvasRef }: PointerLockOverlayProps) => {
-    const [isLocked, setIsLocked] = useState(false);
+    const [isLocked, setIsLocked] = useState(
+        () => typeof document !== 'undefined' && document.pointerLockElement != null,
+    );
 
     useEffect(() => {
-        const handler = () => setIsLocked(document.pointerLockElement != null);
+        const handler = () =>
+            setIsLocked(
+                canvasRef?.current
+                    ? document.pointerLockElement === canvasRef.current
+                    : document.pointerLockElement != null,
+            );
+        handler();
         document.addEventListener('pointerlockchange', handler);
         return () => document.removeEventListener('pointerlockchange', handler);
-    }, []);
+    }, [canvasRef]);
 
     if (isLocked) {
         return null;
@@ -46,7 +53,6 @@ export const PointerLockOverlay = ({ canvasRef }: PointerLockOverlayProps) => {
     const handleClick = () => {
         // Warm up audio context on user gesture
         audioService.warmup();
-        AudioManager.warmup();
         // Request pointer lock on the canvas
         canvasRef?.current?.requestPointerLock();
     };

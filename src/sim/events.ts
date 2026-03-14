@@ -1,3 +1,5 @@
+import type { PickupId } from '../content/levels/types';
+
 export type EntityId = number;
 
 export type DamageEvent = {
@@ -25,12 +27,13 @@ export type SpawnDecalEvent = {
 export type EnemyDiedEvent = {
     enemyId: EntityId;
     position: { x: number; y: number; z: number };
+    spawnId?: string | null;
     type: 'enemyDied';
 };
 
 export type PickupCollectedEvent = {
     collectorId: EntityId;
-    pickupId: string;
+    pickupId: PickupId;
     type: 'pickupCollected';
 };
 

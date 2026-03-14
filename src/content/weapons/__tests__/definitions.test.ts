@@ -15,6 +15,10 @@ describe('WeaponRegistry', () => {
         }
     });
 
+    it('contains at least one weapon definition', () => {
+        expect(Object.keys(WEAPON_REGISTRY).length).toBeGreaterThan(0);
+    });
+
     it('all weapons have a type', () => {
         for (const [id, def] of Object.entries(WEAPON_REGISTRY)) {
             expect(['hitscan', 'melee'], `${id} type`).toContain(def.type);

@@ -1,14 +1,22 @@
 import type { HudState } from '../runtime/types';
+import { clamp01, getAmmoColor, getHealthColor } from './utils/hudColorMapping';
 
 type HudProps = {
     state: HudState;
 };
 
+export const computeAmmoRatio = (ammo: number, magazineSize: number): number =>
+    magazineSize > 0 ? ammo / magazineSize : 1;
+
 export function Hud({ state }: HudProps) {
-    const ammoRatio = state.magazineSize > 0 ? state.ammo / state.magazineSize : 1;
-    const ammoColor = ammoRatio > 0.5 ? '#FFFFFF' : ammoRatio > 0.25 ? '#FFD700' : '#FF6B6B';
-    const healthRatio = state.healthMax > 0 ? state.health / state.healthMax : 1;
-    const healthColor = healthRatio > 0.6 ? '#44FF44' : healthRatio > 0.3 ? '#FFD700' : '#FF4444';
+    const ammoRatioRaw = computeAmmoRatio(state.ammo, state.magazineSize);
+    const ammoRatio = clamp01(ammoRatioRaw);
+    const ammoColor = getAmmoColor(ammoRatio);
+    const healthRatioRaw = state.healthMax > 0 ? state.health / state.healthMax : 1;
+    const healthRatio = clamp01(healthRatioRaw);
+    const healthColor = getHealthColor(healthRatio);
+    const healthDisplay = Math.max(0, Math.ceil(state.health));
+    const hasAmmo = state.magazineSize > 0 || state.totalAmmo > 0;
 
     return (
         <div className="hud">
@@ -31,7 +39,7 @@ export function Hud({ state }: HudProps) {
                     />
                 </div>
                 <div className="health-text" style={{ color: healthColor }}>
-                    {Math.ceil(state.health)} HP
+                    {healthDisplay} HP
                 </div>
             </div>
 
@@ -45,13 +53,15 @@ export function Hud({ state }: HudProps) {
             <div className="weapon-hud" aria-live="polite">
                 <img className="weapon-image" src={state.hudImage} alt={state.weaponName || 'Weapon'} />
                 <div className="weapon-name">{state.weaponName}</div>
-                <div className="weapon-ammo">
-                    <span className="weapon-ammo-current" style={{ color: ammoColor }}>
-                        {state.ammo}
-                    </span>
-                    <span className="weapon-ammo-separator">/</span>
-                    <span className="weapon-ammo-total">{state.totalAmmo}</span>
-                </div>
+                {hasAmmo && (
+                    <div className="weapon-ammo">
+                        <span className="weapon-ammo-current" style={{ color: ammoColor }}>
+                            {state.ammo}
+                        </span>
+                        <span className="weapon-ammo-separator">/</span>
+                        <span className="weapon-ammo-total">{state.totalAmmo}</span>
+                    </div>
+                )}
             </div>
 
             <div className={`reload-indicator ${state.isReloading ? 'visible' : ''}`} aria-hidden={!state.isReloading}>

@@ -1,5 +1,5 @@
 import { ENEMY_REGISTRY } from '../enemies/definitions';
-import type { LevelDef } from './types';
+import type { LevelDef, PickupId } from './types';
 
 export type ValidationError = {
     field: string;
@@ -23,6 +23,10 @@ const validateBasicFields = (level: LevelDef, errors: ValidationError[]): void =
 
 const validateEnemies = (level: LevelDef, errors: ValidationError[]): Set<string> => {
     const seenSpawnIds = new Set<string>();
+    if (!Array.isArray(level.enemies)) {
+        errors.push({ field: 'enemies', message: 'Enemies must be an array' });
+        return seenSpawnIds;
+    }
     for (let i = 0; i < level.enemies.length; i++) {
         const spawn = level.enemies[i]!;
         if (!ENEMY_REGISTRY[spawn.enemyDefId]) {
@@ -45,7 +49,11 @@ const validateEnemies = (level: LevelDef, errors: ValidationError[]): Set<string
 };
 
 const validatePickups = (level: LevelDef, errors: ValidationError[]): void => {
-    const validPickupIds = new Set(['health', 'ammo', 'shield']);
+    const validPickupIds: ReadonlySet<PickupId> = new Set(['health', 'ammo', 'shield']);
+    if (!Array.isArray(level.pickups)) {
+        errors.push({ field: 'pickups', message: 'Pickups must be an array' });
+        return;
+    }
     for (let i = 0; i < level.pickups.length; i++) {
         const pickup = level.pickups[i]!;
         if (!validPickupIds.has(pickup.pickupId)) {
@@ -58,6 +66,10 @@ const validatePickups = (level: LevelDef, errors: ValidationError[]): void => {
 };
 
 const validateMissions = (level: LevelDef, seenSpawnIds: Set<string>, errors: ValidationError[]): void => {
+    if (!Array.isArray(level.missions)) {
+        errors.push({ field: 'missions', message: 'Missions must be an array' });
+        return;
+    }
     for (let i = 0; i < level.missions.length; i++) {
         const mission = level.missions[i]!;
         if (mission.type === 'kill_target') {

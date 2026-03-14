@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { HudState } from '../../runtime/types';
+import { computeAmmoRatio } from '../Hud';
+import { clamp01, getAmmoColor, getHealthColor } from '../utils/hudColorMapping';
 
 const createHudState = (overrides: Partial<HudState> = {}): HudState => ({
     ammo: 30,
@@ -19,36 +21,26 @@ const createHudState = (overrides: Partial<HudState> = {}): HudState => ({
 describe('HUD state mapping', () => {
     it('computes ammo ratio correctly', () => {
         const state = createHudState({ ammo: 15, magazineSize: 30 });
-        const ratio = state.magazineSize > 0 ? state.ammo / state.magazineSize : 1;
+        const ratio = computeAmmoRatio(state.ammo, state.magazineSize);
         expect(ratio).toBe(0.5);
     });
 
     it('returns 1 when magazine size is zero (knife)', () => {
         const state = createHudState({ ammo: 0, magazineSize: 0 });
-        const ratio = state.magazineSize > 0 ? state.ammo / state.magazineSize : 1;
+        const ratio = computeAmmoRatio(state.ammo, state.magazineSize);
         expect(ratio).toBe(1);
     });
 
     it('maps health ratio to correct color bands', () => {
-        const getHealthColor = (health: number, max: number) => {
-            const ratio = max > 0 ? health / max : 1;
-            return ratio > 0.6 ? '#44FF44' : ratio > 0.3 ? '#FFD700' : '#FF4444';
-        };
-
-        expect(getHealthColor(100, 100)).toBe('#44FF44');
-        expect(getHealthColor(50, 100)).toBe('#FFD700');
-        expect(getHealthColor(20, 100)).toBe('#FF4444');
+        expect(getHealthColor(clamp01(100 / 100))).toBe('#44FF44');
+        expect(getHealthColor(clamp01(50 / 100))).toBe('#FFD700');
+        expect(getHealthColor(clamp01(20 / 100))).toBe('#FF4444');
     });
 
     it('maps ammo ratio to correct color bands', () => {
-        const getAmmoColor = (ammo: number, magazineSize: number) => {
-            const ratio = magazineSize > 0 ? ammo / magazineSize : 1;
-            return ratio > 0.5 ? '#FFFFFF' : ratio > 0.25 ? '#FFD700' : '#FF6B6B';
-        };
-
-        expect(getAmmoColor(20, 30)).toBe('#FFFFFF');
-        expect(getAmmoColor(10, 30)).toBe('#FFD700');
-        expect(getAmmoColor(2, 30)).toBe('#FF6B6B');
+        expect(getAmmoColor(clamp01(20 / 30))).toBe('#FFFFFF');
+        expect(getAmmoColor(clamp01(10 / 30))).toBe('#FFD700');
+        expect(getAmmoColor(clamp01(2 / 30))).toBe('#FF6B6B');
     });
 
     it('shows mission text when set', () => {

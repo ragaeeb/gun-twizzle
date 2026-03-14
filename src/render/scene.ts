@@ -18,6 +18,8 @@ export class GameScene extends THREE.Scene {
     private initialized = false;
     decalSystem: BulletHoleSystem | null = null;
     impactParticle: ImpactParticleSystem | null = null;
+    private readonly lightOffset = new THREE.Vector3(150, 300, 100);
+    private readonly targetOffset = new THREE.Vector3(0, -10, 0);
 
     initialize(visuals: LevelVisuals) {
         if (this.initialized) {
@@ -114,11 +116,8 @@ export class GameScene extends THREE.Scene {
             return;
         }
 
-        const lightOffset = new THREE.Vector3(150, 300, 100);
-        const targetOffset = new THREE.Vector3(0, -10, 0);
-
-        this.directionalLight.position.copy(playerPosition).add(lightOffset);
-        this.directionalLight.target.position.copy(playerPosition).add(targetOffset);
+        this.directionalLight.position.copy(playerPosition).add(this.lightOffset);
+        this.directionalLight.target.position.copy(playerPosition).add(this.targetOffset);
         this.directionalLight.target.updateMatrixWorld();
         this.directionalLight.shadow.camera.updateProjectionMatrix();
     }

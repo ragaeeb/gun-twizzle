@@ -14,7 +14,13 @@ import { LEVEL_2 } from '../src/content/levels/level2';
 import { LEVEL_3 } from '../src/content/levels/level3';
 import { LEVEL_4 } from '../src/content/levels/level4';
 import type { LevelDef } from '../src/content/levels/types';
-import { decodeClientMessage } from '../src/net/protocol';
+import {
+    type ClientInputMsg,
+    type ClientJoinMsg,
+    decodeClientMessage,
+    isSerializedInput,
+    type SerializedInput,
+} from '../src/net/protocol';
 import { createRoom, type PlayerData } from './room';
 import { createServerSimulation } from './simulation';
 
@@ -22,6 +28,7 @@ const PORT = Number(process.env.PORT ?? 3001);
 const LEVEL_ID = process.env.LEVEL_ID ?? 'level1';
 const TICK_HZ = 60;
 const SNAPSHOT_INTERVAL = 3; // broadcast every Nth tick
+const MAX_INPUTS_PER_SECOND = 120;
 
 const LEVELS: Record<string, LevelDef> = {
     level1: LEVEL_1,
@@ -39,6 +46,85 @@ if (!levelDef) {
 const room = createRoom();
 const sim = createServerSimulation(levelDef, room);
 let tickCounter = 0;
+const inputRateMap = new Map<string, { count: number; resetAt: number }>();
+
+type RoomSocket = {
+    close: () => void;
+    data: PlayerData;
+    send: (data: string) => void;
+};
+
+const checkInputRate = (playerId: string): boolean => {
+    const now = Date.now();
+    const entry = inputRateMap.get(playerId);
+    if (!entry || now > entry.resetAt) {
+        inputRateMap.set(playerId, { count: 1, resetAt: now + 1000 });
+        return true;
+    }
+    entry.count += 1;
+    return entry.count <= MAX_INPUTS_PER_SECOND;
+};
+
+const isValidInput = (input: unknown): input is SerializedInput => isSerializedInput(input);
+
+const handleJoinMessage = (ws: RoomSocket, msg: ClientJoinMsg) => {
+    if (room.isFull()) {
+        ws.send(JSON.stringify({ message: 'Room is full', type: 'error' }));
+        ws.close();
+        return;
+    }
+
+    // Reset the level when first player joins an empty room
+    if (room.getPlayers().length === 0) {
+        sim.reset();
+    }
+
+    const slot = room.join(ws, msg.name);
+    if (!slot) {
+        ws.send(JSON.stringify({ message: 'Failed to join', type: 'error' }));
+        ws.close();
+        return;
+    }
+
+    sim.registerPlayer(slot);
+
+    // Send welcome to the joining player
+    room.sendTo(slot.id, {
+        levelId: levelDef.id,
+        playerId: slot.id,
+        snapshot: sim.getSnapshot(),
+        tick: tickCounter,
+        type: 's:welcome',
+    });
+
+    // Notify others
+    room.broadcast(
+        {
+            playerId: slot.id,
+            slot: slot.slot,
+            type: 's:playerJoin',
+        },
+        slot.id,
+    );
+
+    console.log(`[ws] ${slot.name} joined as ${slot.id} (slot ${slot.slot})`);
+};
+
+const handleInputMessage = (ws: RoomSocket, msg: ClientInputMsg) => {
+    const playerId = ws.data.playerId;
+    if (!playerId) {
+        return;
+    }
+    if (!checkInputRate(playerId)) {
+        console.warn(`[ws] input rate limit exceeded for ${playerId}`);
+        return;
+    }
+    if (!isValidInput(msg.input) || !Number.isFinite(msg.seq)) {
+        console.warn(`[ws] invalid input payload from ${playerId}`);
+        return;
+    }
+    sim.applyInput(playerId, msg.input, msg.seq);
+};
 
 // ─── Tick loop ──────────────────────────────────────────────────────────
 
@@ -87,6 +173,7 @@ const server = Bun.serve<PlayerData>({
                 sim.removePlayer(playerId);
                 room.leave(playerId);
                 room.broadcast({ playerId, type: 's:playerLeave' });
+                inputRateMap.delete(playerId);
                 console.log(`[ws] ${playerId} disconnected`);
             }
         },
@@ -101,55 +188,12 @@ const server = Bun.serve<PlayerData>({
 
                 switch (msg.type) {
                     case 'c:join': {
-                        if (room.isFull()) {
-                            ws.send(JSON.stringify({ message: 'Room is full', type: 'error' }));
-                            ws.close();
-                            return;
-                        }
-
-                        // Reset the level when first player joins an empty room
-                        if (room.getPlayers().length === 0) {
-                            sim.reset();
-                        }
-
-                        const slot = room.join(ws, msg.name);
-                        if (!slot) {
-                            ws.send(JSON.stringify({ message: 'Failed to join', type: 'error' }));
-                            ws.close();
-                            return;
-                        }
-
-                        sim.registerPlayer(slot);
-
-                        // Send welcome to the joining player
-                        room.sendTo(slot.id, {
-                            levelId: levelDef.id,
-                            playerId: slot.id,
-                            snapshot: sim.getSnapshot(),
-                            tick: tickCounter,
-                            type: 's:welcome',
-                        });
-
-                        // Notify others
-                        room.broadcast(
-                            {
-                                playerId: slot.id,
-                                slot: slot.slot,
-                                type: 's:playerJoin',
-                            },
-                            slot.id,
-                        );
-
-                        console.log(`[ws] ${slot.name} joined as ${slot.id} (slot ${slot.slot})`);
+                        handleJoinMessage(ws, msg);
                         break;
                     }
 
                     case 'c:input': {
-                        const playerId = ws.data.playerId;
-                        if (!playerId) {
-                            return;
-                        }
-                        sim.applyInput(playerId, msg.input, msg.seq);
+                        handleInputMessage(ws, msg);
                         break;
                     }
                 }

@@ -41,6 +41,7 @@ const createTestWorld = () => {
         enemyDefId: 'grunt',
         patrolIndex: 0,
         patrolPath: [],
+        spawnId: null,
         state: 'idle',
         targetEntityId: null,
     });
@@ -165,5 +166,44 @@ describe('aiSystem', () => {
 
         expect(world.ai.get(enemyId)?.state).toBe('idle');
         expect(events).toEqual([]);
+    });
+
+    it('advances patrol when in patrol state and player is out of range', () => {
+        const { enemyId, playerId, world } = createTestWorld();
+        const ai = world.ai.get(enemyId)!;
+        ai.state = 'patrol';
+        ai.patrolPath = [
+            { x: 49, y: 0, z: 0 },
+            { x: 51, y: 0, z: 0 },
+        ];
+        ai.patrolIndex = 0;
+        // Keep player far to avoid chase
+        world.transform.get(playerId)!.position.x = 0;
+
+        const before = { ...world.transform.get(enemyId)!.position };
+        const events: SimEvent[] = [];
+
+        aiSystem(world, playerId, ENEMY_REGISTRY, 1, events);
+
+        const after = world.transform.get(enemyId)!.position;
+        expect(after.x).not.toBe(before.x);
+        expect(ai.state).toBe('patrol');
+    });
+
+    it('wraps patrol index when reaching a waypoint', () => {
+        const { enemyId, playerId, world } = createTestWorld();
+        const ai = world.ai.get(enemyId)!;
+        ai.state = 'patrol';
+        ai.patrolPath = [
+            { x: 50, y: 0, z: 0 },
+            { x: 52, y: 0, z: 0 },
+        ];
+        ai.patrolIndex = 0;
+        world.transform.get(playerId)!.position.x = 0;
+
+        const events: SimEvent[] = [];
+        aiSystem(world, playerId, ENEMY_REGISTRY, 1 / 60, events);
+
+        expect(ai.patrolIndex).toBe(1);
     });
 });

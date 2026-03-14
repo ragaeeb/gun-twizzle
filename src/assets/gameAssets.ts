@@ -1,15 +1,52 @@
-// @ts-nocheck
 import * as THREE from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
 import { AssetRegistry } from '../assets/registry';
+import type { WeaponId } from '../runtime/types';
 import { prepareWeaponAnimationClips } from '../runtime/weaponAnimationClips';
 import { WeaponRegistry } from '../runtime/weapons';
 
-function cloneScene(scene) {
-    const clonedScene = cloneSkeleton(scene);
+type ClipMapEntry = {
+    additive?: boolean;
+    clip: string;
+    loop?: boolean;
+};
+
+type ClipMapJson = Record<string, ClipMapEntry>;
+
+type Marker = {
+    name: string;
+    time: number;
+};
+
+type AnimationMarker = {
+    End?: Marker;
+    Start?: Marker;
+    name: string;
+};
+
+type WeaponMarkerJson = {
+    clipBased?: boolean;
+    clipMap?: ClipMapJson;
+    markers?: Marker[];
+};
+
+type SfxPool = {
+    nextIndex: number;
+    sources: THREE.Audio[];
+};
+
+type ClipMapEntryResolved = {
+    additive: boolean;
+    clipName: string;
+    loop: boolean;
+};
+
+function cloneScene<T extends THREE.Object3D & { animations?: THREE.AnimationClip[] }>(scene: T): T {
+    const clonedScene = cloneSkeleton(scene) as T;
     clonedScene.animations = scene.animations;
     return clonedScene;
 }
@@ -20,18 +57,20 @@ function createWhiteTexture() {
     canvas.height = 1;
 
     const context = canvas.getContext('2d');
-    context.fillStyle = 'white';
-    context.fillRect(0, 0, 1, 1);
+    if (context) {
+        context.fillStyle = 'white';
+        context.fillRect(0, 0, 1, 1);
+    }
 
     return new THREE.CanvasTexture(canvas);
 }
 
-function getAdditiveClipNames(clipMapJson) {
+function getAdditiveClipNames(clipMapJson?: ClipMapJson) {
     if (!clipMapJson) {
         return [];
     }
 
-    const additiveClipNames = new Set();
+    const additiveClipNames = new Set<string>();
     for (const entry of Object.values(clipMapJson)) {
         const additive = entry.additive ?? entry.clip.toLowerCase().includes('additive');
         if (additive) {
@@ -51,10 +90,25 @@ const VOLUME_PRESETS = {
 };
 
 const SFX_POOL_SIZE = 8;
+const POSITIONAL_SFX_POOL_SIZE = 12;
 
 // biome-ignore lint/complexity/noStaticOnlyClass: legacy static singleton to keep global audio state centralized.
 class AudioManagerClass {
-    static async init(camera) {
+    static listener: THREE.AudioListener | null = null;
+    static camera: THREE.Camera | null = null;
+    static loadedSounds = new Map<string, THREE.Audio>();
+    static loadedBuffers = new Map<string, AudioBuffer>();
+    static sfxPool = new Map<string, SfxPool>();
+    static positionalSfxPool: THREE.PositionalAudio[] = [];
+    static positionalSfxPoolIndex = 0;
+    static activePositionalSources = new Set<THREE.PositionalAudio>();
+    static audioLoader = new THREE.AudioLoader();
+    static masterVolume = 1;
+    static sfxVolume = 1;
+    static musicVolume = 1;
+    static isInitialized = false;
+
+    static async init(camera: THREE.Camera) {
         if (AudioManagerClass.isInitialized) {
             return;
         }
@@ -76,12 +130,12 @@ class AudioManagerClass {
         }
     }
 
-    static async loadSound(key, path) {
+    static async loadSound(key: string, path: string) {
         if (!AudioManagerClass.isInitialized) {
             throw new Error('AudioManager not initialized. Call AudioManager.init() first.');
         }
 
-        return new Promise((resolve, reject) => {
+        return new Promise<void>((resolve, reject) => {
             AudioManagerClass.audioLoader.load(
                 path,
                 (buffer) => {
@@ -118,7 +172,7 @@ class AudioManagerClass {
         await Promise.all(sounds.map(({ key, path }) => AudioManagerClass.loadSound(key, path).catch(() => {})));
     }
 
-    static playSoundscape(ambientSoundKey) {
+    static playSoundscape(ambientSoundKey?: string | null) {
         if (!ambientSoundKey) {
             return;
         }
@@ -127,12 +181,13 @@ class AudioManagerClass {
 
         AudioManagerClass.stopSound('__ambient__');
 
+        const listener = AudioManagerClass.listener;
         const buffer = AudioManagerClass.loadedBuffers.get(ambientSoundKey);
-        if (!buffer || !AudioManagerClass.listener) {
+        if (!buffer || !listener) {
             return;
         }
 
-        const sound = new THREE.Audio(AudioManagerClass.listener);
+        const sound = new THREE.Audio(listener);
         sound.setBuffer(buffer);
         sound.setLoop(true);
         sound.setVolume(VOLUME_PRESETS.ambient * AudioManagerClass.sfxVolume * AudioManagerClass.masterVolume);
@@ -148,7 +203,7 @@ class AudioManagerClass {
         AudioManagerClass.playMusic('menu_music', VOLUME_PRESETS.music);
     }
 
-    static getSfxPoolSource(key) {
+    static getSfxPoolSource(key: string) {
         let pool = AudioManagerClass.sfxPool.get(key);
         if (!pool) {
             pool = { nextIndex: 0, sources: [] };
@@ -156,23 +211,60 @@ class AudioManagerClass {
         }
 
         if (pool.sources.length < SFX_POOL_SIZE) {
-            const sound = new THREE.Audio(AudioManagerClass.listener);
+            const listener = AudioManagerClass.listener;
+            if (!listener) {
+                return undefined;
+            }
+            const sound = new THREE.Audio(listener);
             pool.sources.push(sound);
             return sound;
         }
 
         const source = pool.sources[pool.nextIndex % SFX_POOL_SIZE];
-        pool.nextIndex = (pool.nextIndex + 1) % SFX_POOL_SIZE;
+        if (source) {
+            pool.nextIndex = (pool.nextIndex + 1) % SFX_POOL_SIZE;
 
-        if (source.isPlaying) {
-            source.stop();
+            if (source.isPlaying) {
+                source.stop();
+            }
         }
 
         return source;
     }
 
-    static playSFX(key, volume = 1, loop = false) {
-        if (!AudioManagerClass.isInitialized || !AudioManagerClass.listener) {
+    static getPositionalPoolSource() {
+        const available = AudioManagerClass.positionalSfxPool.find((source) => !source.isPlaying);
+        if (available) {
+            return available;
+        }
+
+        if (AudioManagerClass.positionalSfxPool.length < POSITIONAL_SFX_POOL_SIZE) {
+            const listener = AudioManagerClass.listener;
+            if (!listener) {
+                return undefined;
+            }
+            const source = new THREE.PositionalAudio(listener);
+            AudioManagerClass.positionalSfxPool.push(source);
+            return source;
+        }
+
+        const source =
+            AudioManagerClass.positionalSfxPool[AudioManagerClass.positionalSfxPoolIndex % POSITIONAL_SFX_POOL_SIZE];
+        if (source) {
+            AudioManagerClass.positionalSfxPoolIndex =
+                (AudioManagerClass.positionalSfxPoolIndex + 1) % POSITIONAL_SFX_POOL_SIZE;
+
+            if (source.isPlaying) {
+                source.stop();
+            }
+        }
+
+        return source;
+    }
+
+    static playSFX(key: string, volume = 1, loop = false) {
+        const listener = AudioManagerClass.listener;
+        if (!AudioManagerClass.isInitialized || !listener) {
             return null;
         }
 
@@ -183,7 +275,10 @@ class AudioManagerClass {
             return null;
         }
 
-        const sound = loop ? new THREE.Audio(AudioManagerClass.listener) : AudioManagerClass.getSfxPoolSource(key);
+        const sound = loop ? new THREE.Audio(listener) : AudioManagerClass.getSfxPoolSource(key);
+        if (!sound) {
+            return null;
+        }
         sound.setBuffer(buffer);
         sound.setLoop(loop);
         sound.setVolume(
@@ -195,13 +290,16 @@ class AudioManagerClass {
             sound.onEnded = () => {
                 sound.disconnect();
             };
+        } else {
+            sound.onEnded = null;
         }
 
         return sound;
     }
 
-    static playMusic(key, volume = 1, loop = true) {
-        if (!AudioManagerClass.isInitialized || !AudioManagerClass.listener) {
+    static playMusic(key: string, volume = 1, loop = true) {
+        const listener = AudioManagerClass.listener;
+        if (!AudioManagerClass.isInitialized || !listener) {
             return null;
         }
 
@@ -214,7 +312,7 @@ class AudioManagerClass {
 
         AudioManagerClass.stopSound(key);
 
-        const sound = new THREE.Audio(AudioManagerClass.listener);
+        const sound = new THREE.Audio(listener);
         sound.setBuffer(buffer);
         sound.setLoop(loop);
         sound.setVolume(volume * AudioManagerClass.musicVolume * AudioManagerClass.masterVolume);
@@ -224,8 +322,15 @@ class AudioManagerClass {
         return sound;
     }
 
-    static playPositionalSFX(key, position, volume = 1, refDistance = 5, rolloffFactor = 2, loop = false) {
-        if (!AudioManagerClass.isInitialized || !AudioManagerClass.listener) {
+    static playPositionalSFX(
+        key: string,
+        position: THREE.Vector3,
+        volume = 1,
+        refDistance = 5,
+        rolloffFactor = 2,
+        loop = false,
+    ) {
+        if (!AudioManagerClass.isInitialized) {
             return null;
         }
 
@@ -236,7 +341,12 @@ class AudioManagerClass {
             return null;
         }
 
-        const sound = new THREE.PositionalAudio(AudioManagerClass.listener);
+        const sound = AudioManagerClass.getPositionalPoolSource();
+        if (!sound) {
+            return null;
+        }
+        AudioManagerClass.activePositionalSources.delete(sound);
+        sound.onEnded = null;
         sound.setBuffer(buffer);
         sound.setRefDistance(refDistance);
         sound.setRolloffFactor(rolloffFactor);
@@ -246,9 +356,11 @@ class AudioManagerClass {
         );
         sound.position.copy(position);
         sound.play();
+        AudioManagerClass.activePositionalSources.add(sound);
 
         if (!loop) {
             sound.onEnded = () => {
+                AudioManagerClass.activePositionalSources.delete(sound);
                 sound.disconnect();
             };
         }
@@ -256,7 +368,7 @@ class AudioManagerClass {
         return sound;
     }
 
-    static stopSound(key) {
+    static stopSound(key: string) {
         const sound = AudioManagerClass.loadedSounds.get(key);
         if (sound?.isPlaying) {
             sound.stop();
@@ -275,31 +387,31 @@ class AudioManagerClass {
         AudioManagerClass.loadedSounds.clear();
     }
 
-    static pauseSound(key) {
+    static pauseSound(key: string) {
         const sound = AudioManagerClass.loadedSounds.get(key);
         if (sound?.isPlaying) {
             sound.pause();
         }
     }
 
-    static resumeSound(key) {
+    static resumeSound(key: string) {
         const sound = AudioManagerClass.loadedSounds.get(key);
         if (sound && !sound.isPlaying) {
             sound.play();
         }
     }
 
-    static setMasterVolume(volume) {
+    static setMasterVolume(volume: number) {
         AudioManagerClass.masterVolume = Math.max(0, Math.min(1, volume));
         AudioManagerClass.updateAllVolumes();
     }
 
-    static setSFXVolume(volume) {
+    static setSFXVolume(volume: number) {
         AudioManagerClass.sfxVolume = Math.max(0, Math.min(1, volume));
         AudioManagerClass.updateAllVolumes();
     }
 
-    static setMusicVolume(volume) {
+    static setMusicVolume(volume: number) {
         AudioManagerClass.musicVolume = Math.max(0, Math.min(1, volume));
         AudioManagerClass.updateAllVolumes();
     }
@@ -317,8 +429,12 @@ class AudioManagerClass {
     }
 
     static updateAllVolumes() {
-        AudioManagerClass.loadedSounds.forEach((sound) => {
-            sound.setVolume(AudioManagerClass.masterVolume * AudioManagerClass.sfxVolume);
+        AudioManagerClass.loadedSounds.forEach((sound, key) => {
+            if (key === '__ambient__') {
+                sound.setVolume(VOLUME_PRESETS.ambient * AudioManagerClass.sfxVolume * AudioManagerClass.masterVolume);
+                return;
+            }
+            sound.setVolume(AudioManagerClass.musicVolume * AudioManagerClass.masterVolume);
         });
     }
 
@@ -336,6 +452,21 @@ class AudioManagerClass {
             }
         }
         AudioManagerClass.sfxPool.clear();
+        for (const source of AudioManagerClass.activePositionalSources) {
+            if (source.isPlaying) {
+                source.stop();
+            }
+            source.disconnect();
+        }
+        AudioManagerClass.activePositionalSources.clear();
+        for (const source of AudioManagerClass.positionalSfxPool) {
+            if (source.isPlaying) {
+                source.stop();
+            }
+            source.disconnect();
+        }
+        AudioManagerClass.positionalSfxPool.length = 0;
+        AudioManagerClass.positionalSfxPoolIndex = 0;
 
         if (AudioManagerClass.listener && AudioManagerClass.camera) {
             AudioManagerClass.camera.remove(AudioManagerClass.listener);
@@ -347,19 +478,24 @@ class AudioManagerClass {
     }
 }
 
-AudioManagerClass.listener = null;
-AudioManagerClass.camera = null;
-AudioManagerClass.loadedSounds = new Map();
-AudioManagerClass.loadedBuffers = new Map();
-AudioManagerClass.sfxPool = new Map();
-AudioManagerClass.audioLoader = new THREE.AudioLoader();
-AudioManagerClass.masterVolume = 1;
-AudioManagerClass.sfxVolume = 1;
-AudioManagerClass.musicVolume = 1;
-AudioManagerClass.isInitialized = false;
-
 class FpsWeaponMesh {
-    constructor(path, key) {
+    path: string;
+    key: string;
+    mesh: THREE.Group | null;
+    mixer: THREE.AnimationMixer | null;
+    lastAnimationDuration: number;
+    animationMarkers: Map<string, AnimationMarker>;
+    soundMarkers: Array<{ marker: Marker; name: string }>;
+    currentAnimIsLoop: boolean;
+    currentAnim: AnimationMarker | null;
+    isAnimationFinished: boolean;
+    playedSounds: Set<string>;
+    clipBased: boolean;
+    clipMap: Map<string, ClipMapEntryResolved>;
+    currentClipAction: THREE.AnimationAction | null;
+    debugPoseLocked: boolean;
+
+    constructor(path: string, key: string) {
         this.path = path;
         this.key = key;
         this.mesh = null;
@@ -381,11 +517,12 @@ class FpsWeaponMesh {
         const gltf = await AssetManager.loadModel(this.path);
         this.mesh = gltf.scene;
 
-        const markerPath = WeaponRegistry.get(this.key)?.markerPath ?? this.path.replace(/\.(glb|gltf)$/i, '.json');
-        const markerJson = await AssetManager.loadJson(markerPath);
+        const markerPath =
+            WeaponRegistry.get(this.key as WeaponId)?.markerPath ?? this.path.replace(/\.(glb|gltf)$/i, '.json');
+        const markerJson = await AssetManager.loadJson<WeaponMarkerJson>(markerPath);
         const isClipBased = Boolean(markerJson?.clipBased && markerJson.clipMap);
-        const clipMapJson = isClipBased ? markerJson.clipMap : undefined;
-        const modelScale = WeaponRegistry.get(this.key)?.modelScale;
+        const clipMapJson = isClipBased ? markerJson?.clipMap : undefined;
+        const modelScale = WeaponRegistry.get(this.key as WeaponId)?.modelScale;
         this.mesh.animations = prepareWeaponAnimationClips({
             additiveClipNames: getAdditiveClipNames(clipMapJson),
             clipBased: isClipBased,
@@ -403,8 +540,11 @@ class FpsWeaponMesh {
         this.init();
     }
 
-    setClipMapData(clipMapJson) {
+    setClipMapData(clipMapJson?: ClipMapJson) {
         this.clipMap = new Map();
+        if (!clipMapJson) {
+            return;
+        }
         for (const [animName, entry] of Object.entries(clipMapJson)) {
             this.clipMap.set(animName, {
                 additive: entry.additive ?? entry.clip.toLowerCase().includes('additive'),
@@ -414,9 +554,9 @@ class FpsWeaponMesh {
         }
     }
 
-    setMarkerData(markers) {
-        const animationMarkers = new Map();
-        const soundMarkers = [];
+    setMarkerData(markers: Marker[]) {
+        const animationMarkers = new Map<string, AnimationMarker>();
+        const soundMarkers: Array<{ marker: Marker; name: string }> = [];
 
         for (const marker of markers) {
             if (marker.name.startsWith('Sound_')) {
@@ -465,7 +605,7 @@ class FpsWeaponMesh {
         });
     }
 
-    update(delta) {
+    update(delta: number) {
         if (!this.mixer) {
             return;
         }
@@ -512,6 +652,9 @@ class FpsWeaponMesh {
 
         for (let index = 0; index < this.soundMarkers.length; index += 1) {
             const soundMarker = this.soundMarkers[index];
+            if (!soundMarker) {
+                continue;
+            }
             const soundTime = soundMarker.marker.time;
             const soundKey = `${this.currentAnim.name}_${soundMarker.name}_${index}`;
 
@@ -527,7 +670,7 @@ class FpsWeaponMesh {
         }
     }
 
-    playAnimation(name, loop = false, force = true) {
+    playAnimation(name: string, loop = false, force = true) {
         this.debugPoseLocked = false;
 
         if (this.clipBased) {
@@ -553,7 +696,7 @@ class FpsWeaponMesh {
         this.playAnimationSegment(marker);
     }
 
-    isCurrentClipAction(clip, force) {
+    isCurrentClipAction(clip: THREE.AnimationClip, force: boolean) {
         if (force || !this.currentClipAction) {
             return false;
         }
@@ -561,12 +704,12 @@ class FpsWeaponMesh {
         return this.currentClipAction.getClip().name === clip.name;
     }
 
-    configureClipAction(action, entry, useLoop) {
+    configureClipAction(action: THREE.AnimationAction, entry: ClipMapEntryResolved, useLoop: boolean) {
         if (entry.additive) {
             if (this.currentClipAction && this.currentClipAction !== action && !this.currentAnimIsLoop) {
                 this.currentClipAction.stop();
             }
-        } else {
+        } else if (this.mixer) {
             this.mixer.stopAllAction();
         }
 
@@ -579,7 +722,7 @@ class FpsWeaponMesh {
         action.setEffectiveWeight(1);
     }
 
-    playClipAnimation(name, loop, force) {
+    playClipAnimation(name: string, loop: boolean, force: boolean) {
         if (!this.mixer || !this.mesh) {
             return;
         }
@@ -608,7 +751,7 @@ class FpsWeaponMesh {
         this.isAnimationFinished = false;
     }
 
-    playAnimationSegment(marker) {
+    playAnimationSegment(marker: AnimationMarker) {
         if (!this.mixer || !marker.Start || !marker.End || !this.mesh) {
             return;
         }
@@ -652,7 +795,7 @@ class FpsWeaponMesh {
         }));
     }
 
-    debugPoseClip(clipName, time = 0) {
+    debugPoseClip(clipName?: string, time = 0) {
         if (!this.mesh || !this.mixer) {
             return false;
         }
@@ -718,44 +861,27 @@ class FpsWeaponMesh {
     }
 
     dispose() {
-        if (this.mixer) {
+        if (this.mixer && this.mesh) {
             this.mixer.stopAllAction();
             this.mixer.uncacheRoot(this.mesh);
             this.mixer = null;
         }
 
-        if (this.mesh) {
-            this.mesh.traverse((child) => {
-                if (child.type !== 'Mesh') {
-                    return;
-                }
-
-                const mesh = child;
-                if (mesh.geometry) {
-                    mesh.geometry.dispose();
-                }
-
-                if (mesh.material) {
-                    if (Array.isArray(mesh.material)) {
-                        mesh.material.forEach((material) => {
-                            material.dispose();
-                        });
-                    } else {
-                        mesh.material.dispose();
-                    }
-                }
-            });
-
-            if (this.mesh.parent) {
-                this.mesh.parent.remove(this.mesh);
-            }
+        if (this.mesh?.parent) {
+            this.mesh.parent.remove(this.mesh);
         }
     }
 }
 
 // biome-ignore lint/complexity/noStaticOnlyClass: asset cache is intentionally global and static.
 class AssetManagerClass {
-    static getModel(path) {
+    static gltfLoader = new GLTFLoader();
+    static loadedModels = new Map<string, GLTF>();
+    static clonableFpsMeshes = new Map<string, FpsWeaponMesh>();
+    static fpsMeshPool = new Map<string, FpsWeaponMesh[]>();
+    static MAX_POOL_SIZE = 5;
+
+    static getModel(path: string) {
         const gltf = AssetManagerClass.loadedModels.get(path);
         if (!gltf) {
             return null;
@@ -767,7 +893,7 @@ class AssetManagerClass {
         };
     }
 
-    static async loadModel(path) {
+    static async loadModel(path: string) {
         const cached = AssetManagerClass.loadedModels.get(path);
         if (cached) {
             return {
@@ -785,8 +911,8 @@ class AssetManagerClass {
         };
     }
 
-    static extractMeshes(root) {
-        const meshes = [];
+    static extractMeshes(root: THREE.Object3D) {
+        const meshes: THREE.Mesh[] = [];
         root.traverse((child) => {
             if (child instanceof THREE.Mesh) {
                 meshes.push(child);
@@ -795,20 +921,20 @@ class AssetManagerClass {
         return meshes;
     }
 
-    static async loadJson(path) {
+    static async loadJson<T = unknown>(path: string) {
         try {
             const response = await fetch(path);
             if (!response.ok) {
                 throw new Error(`Failed to load JSON at path ${path}: ${response.status} ${response.statusText}`);
             }
 
-            return await response.json();
+            return (await response.json()) as T;
         } catch {
             return undefined;
         }
     }
 
-    static async registerAnimatedWeapon(key, modelPath) {
+    static async registerAnimatedWeapon(key: string, modelPath: string) {
         const template = new FpsWeaponMesh(modelPath, key);
         await template.load();
         AssetManagerClass.clonableFpsMeshes.set(key, template);
@@ -826,7 +952,7 @@ class AssetManagerClass {
         await AssetManagerClass.loadModel(AssetRegistry.weapons.bullet.model);
     }
 
-    static getWeaponInstance(key) {
+    static getWeaponInstance(key: string) {
         const template = AssetManagerClass.clonableFpsMeshes.get(key);
         if (!template) {
             return null;
@@ -836,13 +962,13 @@ class AssetManagerClass {
         return pool.length > 0 ? pool.pop() : template.clone();
     }
 
-    static returnWeaponToPool(instance) {
+    static returnWeaponToPool(instance: FpsWeaponMesh) {
         const key = instance.key;
-        if (!AssetManagerClass.fpsMeshPool.has(key)) {
-            AssetManagerClass.fpsMeshPool.set(key, []);
+        let pool = AssetManagerClass.fpsMeshPool.get(key);
+        if (!pool) {
+            pool = [];
+            AssetManagerClass.fpsMeshPool.set(key, pool);
         }
-
-        const pool = AssetManagerClass.fpsMeshPool.get(key);
 
         if (pool.length < AssetManagerClass.MAX_POOL_SIZE) {
             if (instance.mixer) {
@@ -865,12 +991,7 @@ class AssetManagerClass {
     }
 }
 
-AssetManagerClass.gltfLoader = new GLTFLoader();
 AssetManagerClass.gltfLoader.setMeshoptDecoder(MeshoptDecoder);
-AssetManagerClass.loadedModels = new Map();
-AssetManagerClass.clonableFpsMeshes = new Map();
-AssetManagerClass.fpsMeshPool = new Map();
-AssetManagerClass.MAX_POOL_SIZE = 5;
 
 export const AudioManager = AudioManagerClass;
 export const AssetManager = AssetManagerClass;

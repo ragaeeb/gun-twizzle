@@ -40,9 +40,8 @@ export type Room = {
     sendTo: (playerId: string, msg: ServerMessage) => void;
 };
 
-let nextPlayerId = 1;
-
 export const createRoom = (): Room => {
+    let nextPlayerId = 1;
     const players = new Map<string, PlayerSlot>();
 
     const findFreeSlot = (): number | null => {
@@ -98,7 +97,7 @@ export const createRoom = (): Room => {
                 position: spawnPositions[slot] ?? [0, 1, 5],
                 slot,
                 stance: 'standing',
-                weaponId: 'rifle',
+                weaponId: 'ak47',
                 ws,
             };
 

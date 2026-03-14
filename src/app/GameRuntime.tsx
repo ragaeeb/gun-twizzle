@@ -3,7 +3,7 @@ import { useRapier } from '@react-three/rapier';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
-import type { LevelDef } from '../content/levels/types';
+import type { LevelDef, PickupId } from '../content/levels/types';
 import type { NetSession } from '../net/session';
 import { EnemyEntity } from '../render/entities/EnemyEntity';
 import { PickupEntity } from '../render/entities/PickupEntity';
@@ -76,7 +76,7 @@ export const GameRuntime = ({
     const engineRef = useRef<GameEngine | null>(null);
     const [ecsWorld, setEcsWorld] = useState<World | null>(null);
     const [enemyIds, setEnemyIds] = useState<EntityId[]>([]);
-    const [pickupEntities, setPickupEntities] = useState<Array<{ entityId: EntityId; pickupId: string }>>([]);
+    const [pickupEntities, setPickupEntities] = useState<Array<{ entityId: EntityId; pickupId: PickupId }>>([]);
     const [remotePlayers, setRemotePlayers] = useState<RemotePlayerState[]>([]);
     const hudStateRef = useRef<HudState | null>(null);
     const loadingStateRef = useRef<LoadingState | null>(null);
@@ -151,6 +151,7 @@ export const GameRuntime = ({
                     const params = new URLSearchParams(window.location.search);
                     if (import.meta.env.DEV || params.has('e2e')) {
                         (window as Window & { __gtDebug?: unknown }).__gtDebug = {
+                            getPointerLockState: () => engine.debugGetPointerLockState(),
                             getWeaponAnimations: () => engine.debugGetWeaponAnimations(),
                             getWeaponTransform: () => engine.debugGetViewModelState(),
                             playWeaponAnimation: (animation: string) => engine.debugPlayWeaponAnimation(animation),

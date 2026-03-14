@@ -12,10 +12,12 @@ const applyShieldReduction = (damage: number, shieldCurrent: number): number => 
 const tryEmitDeathEvent = (world: World, targetId: number, outEvents: SimEvent[]): void => {
     if (hasTag(world, targetId, 'enemy')) {
         const transform = world.transform.get(targetId);
+        const ai = world.ai.get(targetId);
         if (transform) {
             outEvents.push({
                 enemyId: targetId,
                 position: { ...transform.position },
+                spawnId: ai?.spawnId ?? null,
                 type: 'enemyDied',
             });
         }
@@ -33,11 +35,16 @@ export const applyDamageSystem = (world: World, damageEvents: DamageEvent[], out
             continue;
         }
 
+        const wasAlive = health.current > 0;
+        if (!wasAlive) {
+            continue;
+        }
+
         let damage = event.amount * (event.isHeadshot ? 2.0 : 1.0);
         damage = applyShieldReduction(damage, health.shieldCurrent);
         health.current = Math.max(0, health.current - damage);
 
-        if (health.current <= 0) {
+        if (wasAlive && health.current <= 0) {
             tryEmitDeathEvent(world, event.targetId, outEvents);
         }
     }

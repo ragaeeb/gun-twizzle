@@ -6,23 +6,13 @@ const LEVEL_1 = 'The Compound';
 const LEVEL_2 = 'The Shipyard';
 
 const waitForLoadingDismissed = async (page: Page) => {
-    try {
-        await page.waitForFunction(
-            () => {
-                const el = document.querySelector('.loading-screen');
-                return !el || el.classList.contains('hidden');
-            },
-            { timeout: 15_000 },
-        );
-    } catch {
-        await page.evaluate(() => {
+    await page.waitForFunction(
+        () => {
             const el = document.querySelector('.loading-screen');
-            if (el) {
-                el.classList.remove('visible');
-                el.classList.add('hidden');
-            }
-        });
-    }
+            return !el || el.classList.contains('hidden');
+        },
+        { timeout: 15_000 },
+    );
 };
 
 const selectLevel = async (page: Page, levelName: string) => {
@@ -105,22 +95,19 @@ test.describe('GPU Resource Leaks', () => {
         await page.waitForTimeout(500);
 
         const menuBtn = page.locator('button', { hasText: /menu|back|return/i });
-        if ((await menuBtn.count()) > 0) {
-            await menuBtn.first().click();
-            await page.waitForTimeout(2_000);
+        await expect(menuBtn.first(), 'Expected a menu/back/return button after pressing Escape').toBeVisible();
+        await menuBtn.first().click();
+        await page.waitForTimeout(2_000);
 
-            // Load Level 2
-            await selectLevel(page, LEVEL_2);
-            await waitForRendererInfo(page);
+        // Load Level 2
+        await selectLevel(page, LEVEL_2);
+        await waitForRendererInfo(page);
 
-            const afterLevel2 = await getRendererInfo(page);
-            console.log(`Level 2 — Geometries: ${afterLevel2.geometries}, Textures: ${afterLevel2.textures}`);
+        const afterLevel2 = await getRendererInfo(page);
+        console.log(`Level 2 — Geometries: ${afterLevel2.geometries}, Textures: ${afterLevel2.textures}`);
 
-            // Level 1's unique resources should be disposed; net count should not double
-            expect(afterLevel2.geometries, 'Resources doubled after level switch').toBeLessThan(
-                afterLevel1.geometries * 2,
-            );
-            expect(afterLevel2.textures, 'Textures doubled after level switch').toBeLessThan(afterLevel1.textures * 2);
-        }
+        // Level 1's unique resources should be disposed; net count should not double
+        expect(afterLevel2.geometries, 'Resources doubled after level switch').toBeLessThan(afterLevel1.geometries * 2);
+        expect(afterLevel2.textures, 'Textures doubled after level switch').toBeLessThan(afterLevel1.textures * 2);
     });
 });

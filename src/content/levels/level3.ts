@@ -62,10 +62,7 @@ export const LEVEL_3: LevelDef = {
     groundColor: FLOOR,
     id: 'facility',
 
-    missions: [
-        { params: { count: 8 }, type: 'kill_count' },
-        { params: { durationSeconds: 60 }, type: 'survive_timer' },
-    ],
+    missions: [{ params: { count: 8 }, type: 'kill_count' }],
     name: 'The Facility',
 
     pickups: [
