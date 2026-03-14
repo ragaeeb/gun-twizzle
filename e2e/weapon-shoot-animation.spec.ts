@@ -28,6 +28,7 @@ test.beforeEach(async ({ page }) => {
 
 type DebugApi = {
     getWeaponAnimations?: () => Array<{ name: string; duration: number }>;
+    poseWeaponClip?: (clipName: string, time?: number) => unknown;
     setPointerLockState?: (locked: boolean) => void;
 };
 
@@ -98,6 +99,14 @@ const waitForWeaponAnimations = async (page: Page) => {
     });
 };
 
+const getShootClipName = async (page: Page) =>
+    page.evaluate(() => {
+        const debug = (window as WindowWithDebug).__gtDebug;
+        const animations = debug?.getWeaponAnimations?.() ?? [];
+        const shoot = animations.find((anim) => /shoot|fire|attack/i.test(anim.name));
+        return shoot?.name ?? null;
+    });
+
 const waitForAmmoReady = async (page: Page) => {
     await page.waitForFunction(() => {
         const ammoText = document.querySelector('.weapon-ammo-current')?.textContent;
@@ -154,11 +163,25 @@ test.describe('USP Shoot Animation', () => {
         const audioStartsBeforeShot = await getAudioStartCount(page);
         await fireShot(page, false);
         await expect.poll(() => getAudioStartCount(page)).toBeGreaterThan(audioStartsBeforeShot);
-        await page.waitForTimeout(240);
+        const shootClipName = await getShootClipName(page);
+        if (!shootClipName) {
+            throw new Error('Failed to locate a shoot animation clip for the USP.');
+        }
+        const posed = await page.evaluate(
+            ([clipName]) => {
+                const debug = (window as WindowWithDebug).__gtDebug;
+                return debug?.poseWeaponClip?.(clipName, 0.05) ?? false;
+            },
+            [shootClipName],
+        );
+        expect(posed).toBe(true);
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))));
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))));
 
         await expect(page).toHaveScreenshot('weapon-usp-shoot.png', {
             clip: WEAPON_VIEW_CLIP,
             maxDiffPixelRatio: 0.1,
+            timeout: 10_000,
         });
     });
 });

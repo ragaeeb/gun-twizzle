@@ -139,7 +139,6 @@ test.describe('Weapon Model Visibility', () => {
         await unlockShooterInput(page);
         await forcePointerLock(page);
         await waitForDebugApi(page);
-        await waitForWeaponAnimations(page);
 
         const canvas = page.locator('canvas').first();
         await expect(canvas).toBeVisible();
