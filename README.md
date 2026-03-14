@@ -1,6 +1,16 @@
+![Gun Twizzle icon](./icon.png)
+
 # Gun Twizzle
 
-![Bun](https://img.shields.io/badge/bun-1.3.10-14151A?logo=bun&logoColor=white) ![Vite](https://img.shields.io/badge/vite-7.x-646CFF?logo=vite&logoColor=white) ![React](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=black) ![Three.js](https://img.shields.io/badge/three.js-0.183-000000?logo=three.js&logoColor=white) ![TypeScript](https://img.shields.io/badge/typescript-5.9-3178C6?logo=typescript&logoColor=white) ![License](https://img.shields.io/badge/license-MIT-2F8132)
+![Bun](https://img.shields.io/badge/bun-1.3.10-14151A?logo=bun&logoColor=white)
+![Vite](https://img.shields.io/badge/vite-7.x-646CFF?logo=vite&logoColor=white)
+![React](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=black)
+![Three.js](https://img.shields.io/badge/three.js-0.183-000000?logo=three.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/typescript-5.9-3178C6?logo=typescript&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-2F8132)
+[![wakatime](https://wakatime.com/badge/user/a0b906ce-b8e7-4463-8bce-383238df6d4b/project/ebbff9c6-721c-4d5a-91b9-1f58d5f5bf97.svg)](https://wakatime.com/badge/user/a0b906ce-b8e7-4463-8bce-383238df6d4b/project/ebbff9c6-721c-4d5a-91b9-1f58d5f5bf97)
+[![codecov](https://codecov.io/gh/ragaeeb/gun-twizzle/graph/badge.svg?token=LTD9URNCXW)](https://codecov.io/gh/ragaeeb/gun-twizzle)
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ragaeeb/gun-twizzle?utm_source=oss&utm_medium=github&utm_campaign=ragaeeb%2Fgun-twizzle&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 Gun Twizzle is a browser FPS prototype built with Bun, Vite, React Three Fiber, Rapier, and TypeScript. The architecture keeps simulation headless, rendering isolated, and UI decoupled so new features can be layered on without breaking core systems.
 
