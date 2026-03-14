@@ -1,0 +1,80 @@
+{
+    "author": {
+        "name": "Ragaeeb Haq",
+        "url": "https://github.com/ragaeeb"
+    },
+    "bugs": {
+        "url": "https://github.com/ragaeeb/gun-twizzle/issues"
+    },
+    "dependencies": {
+        "@dimforge/rapier3d-compat": "^0.19.3",
+        "@react-three/drei": "^10.7.7",
+        "@react-three/fiber": "^9.5.0",
+        "@react-three/rapier": "^2.2.0",
+        "react": "^19.2.4",
+        "react-dom": "^19.2.4",
+        "three": "^0.183.2"
+    },
+    "description": "FPS prototype built with React Three Fiber and Rapier.",
+    "devDependencies": {
+        "@biomejs/biome": "^2.4.7",
+        "@playwright/test": "^1.58.2",
+        "@semantic-release/changelog": "^6.0.3",
+        "@semantic-release/git": "^10.0.1",
+        "@testing-library/jest-dom": "^6.9.1",
+        "@testing-library/react": "^16.3.2",
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^6.0.1",
+        "@vitest/coverage-v8": "^4.1.0",
+        "bun-types": "^1.3.10",
+        "jsdom": "^28.1.0",
+        "r3f-perf": "^7.2.3",
+        "semantic-release": "^25.0.3",
+        "typescript": "^5.9.3",
+        "vite": "^8.0.0",
+        "vitest": "^4.1.0"
+    },
+    "engines": {
+        "bun": ">=1.3.10",
+        "node": ">=24.0.0"
+    },
+    "homepage": "https://github.com/ragaeeb/gun-twizzle",
+    "keywords": [
+        "fps",
+        "threejs",
+        "react-three-fiber",
+        "rapier",
+        "bun",
+        "r3f"
+    ],
+    "license": "MIT",
+    "licenseFile": "LICENSE.md",
+    "name": "gun-twizzle",
+    "packageManager": "bun@1.3.10",
+    "private": true,
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ragaeeb/gun-twizzle.git"
+    },
+    "scripts": {
+        "assets:optimize": "bun scripts/optimize-assets.ts",
+        "build": "tsc --noEmit && vite build && bun scripts/check-budgets.ts",
+        "build:prod": "bun scripts/optimize-assets.ts && tsc --noEmit && vite build && bun scripts/check-budgets.ts",
+        "dev": "vite",
+        "dev:server": "bun run server/main.ts",
+        "format": "biome check . --write --unsafe",
+        "lint": "biome check . --error-on-warnings",
+        "preview": "vite preview",
+        "test": "vitest run",
+        "test:baselines": "bunx playwright test --config playwright.full.config.ts e2e/collect-baselines.spec.ts",
+        "test:e2e": "bunx playwright test",
+        "test:e2e:full": "bunx playwright test --config playwright.full.config.ts",
+        "test:memory": "bunx playwright test --config playwright.full.config.ts e2e/memory-leak.spec.ts e2e/heap-stability.spec.ts",
+        "test:soak": "bunx playwright test --config playwright.full.config.ts e2e/soak.spec.ts",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit"
+    },
+    "type": "module",
+    "version": "1.0.0"
+}

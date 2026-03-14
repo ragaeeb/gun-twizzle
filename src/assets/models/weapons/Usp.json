@@ -1,0 +1,9 @@
+{
+    "clipBased": true,
+    "clipMap": {
+        "Idle": { "clip": "Armature|Idle", "loop": true },
+        "Reload": { "clip": "Armature|ReloadClip", "loop": false },
+        "Shoot": { "clip": "Armature|Fire", "loop": false },
+        "Switch": { "clip": "Armature|Weild", "loop": false }
+    }
+}
