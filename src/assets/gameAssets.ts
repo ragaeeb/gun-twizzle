@@ -480,7 +480,7 @@ class AudioManagerClass {
     }
 }
 
-class FpsWeaponMesh {
+export class FpsWeaponMesh {
     path: string;
     key: string;
     mesh: THREE.Group | null;

@@ -155,20 +155,22 @@ export const hasTag = (world: World, id: EntityId, tag: string): boolean => {
 };
 
 export const forEachEntityWithTag = (world: World, tag: string, fn: (id: EntityId) => void): void => {
-    for (const [id, tags] of world.tags.entries()) {
-        if (tags.has(tag)) {
-            fn(id);
-        }
+    const indexSet = world.tagIndex.get(tag);
+    if (!indexSet) {
+        return;
+    }
+    for (const id of indexSet) {
+        fn(id);
     }
 };
 
 export const findFirstEntityWithTag = (world: World, tag: string): EntityId | null => {
-    for (const [id, tags] of world.tags.entries()) {
-        if (tags.has(tag)) {
-            return id;
-        }
+    const indexSet = world.tagIndex.get(tag);
+    if (!indexSet || indexSet.size === 0) {
+        return null;
     }
-    return null;
+    const first = indexSet.values().next();
+    return first.done ? null : first.value;
 };
 
 export function* getEntitiesWithTag(world: World, tag: string): Generator<EntityId> {

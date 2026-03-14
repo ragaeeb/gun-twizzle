@@ -51,6 +51,7 @@ export class BulletHoleSystem {
     private instancedMesh: THREE.InstancedMesh | null;
     private nextIndex: number;
     private dummy: THREE.Object3D;
+    private disposed = false;
 
     constructor(scene: THREE.Scene, maxDecals = 50) {
         this.scene = scene;
@@ -66,6 +67,9 @@ export class BulletHoleSystem {
     private async initialize(): Promise<void> {
         try {
             await this.loadTextures();
+            if (this.disposed) {
+                return;
+            }
 
             const geometry = new THREE.PlaneGeometry(0.15, 0.15);
 
@@ -88,6 +92,14 @@ export class BulletHoleSystem {
             });
 
             this.instancedMesh = new THREE.InstancedMesh(geometry, material, this.maxDecals);
+            if (this.disposed) {
+                this.instancedMesh.geometry.dispose();
+                if (this.instancedMesh.material instanceof THREE.Material) {
+                    this.instancedMesh.material.dispose();
+                }
+                this.instancedMesh = null;
+                return;
+            }
             this.instancedMesh.frustumCulled = false;
 
             this.initializeInstances();
@@ -143,6 +155,7 @@ export class BulletHoleSystem {
     }
 
     dispose(): void {
+        this.disposed = true;
         if (this.instancedMesh) {
             if (this.instancedMesh.parent) {
                 this.instancedMesh.parent.remove(this.instancedMesh);
@@ -381,6 +394,7 @@ export class ImpactParticleSystem {
     private smokeSystem: BillboardParticleSystem | null;
     private impactSystem: BillboardParticleSystem | null;
     private currentTime: number;
+    private disposed = false;
 
     constructor(parent: THREE.Object3D) {
         this.parent = parent;
@@ -404,6 +418,9 @@ export class ImpactParticleSystem {
             this.impactTexture = createFallbackTexture();
         }
 
+        if (this.disposed) {
+            return;
+        }
         this.initializeParticleSystems();
     }
 
@@ -497,6 +514,7 @@ export class ImpactParticleSystem {
     }
 
     dispose(): void {
+        this.disposed = true;
         if (this.smokeSystem) {
             this.smokeSystem.dispose();
         }
@@ -669,6 +687,7 @@ export class ShootParticleSystem {
     private smokeSystem: BillboardParticleSystem | null;
     private bulletSystem: BulletCasingParticleSystem | null;
     private currentTime: number;
+    private disposed = false;
 
     constructor(parent: THREE.Object3D) {
         this.parent = parent;
@@ -693,6 +712,9 @@ export class ShootParticleSystem {
             this.smokeTexture = createFallbackTexture();
         }
 
+        if (this.disposed) {
+            return;
+        }
         this.initializeParticleSystems();
     }
 
@@ -808,6 +830,7 @@ export class ShootParticleSystem {
     }
 
     dispose(): void {
+        this.disposed = true;
         if (this.muzzleFlashSystem) {
             this.muzzleFlashSystem.dispose();
         }

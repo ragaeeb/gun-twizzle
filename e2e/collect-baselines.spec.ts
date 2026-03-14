@@ -1,5 +1,5 @@
 /**
- * Collects performance baselines for all three levels.
+ * Collects performance baselines for all four levels.
  * Run via: bun run test:baselines
  *
  * This is an expensive test — excluded from the default test:e2e suite.

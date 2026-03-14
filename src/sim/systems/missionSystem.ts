@@ -30,12 +30,7 @@ const pushMissionProgress = (
     });
 };
 
-const handleSurviveTimer = (
-    state: MissionState,
-    mission: SurviveMission,
-    outEvents: SimEvent[],
-    dt: number,
-) => {
+const handleSurviveTimer = (state: MissionState, mission: SurviveMission, outEvents: SimEvent[], dt: number) => {
     state.elapsedSeconds += dt;
     if (state.elapsedSeconds < mission.params.durationSeconds) {
         return;

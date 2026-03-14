@@ -74,8 +74,9 @@ export class AudioService {
             pool = this.createPool(soundId, buffer);
         }
 
-        const audio = pool.sources[pool.nextIndex % pool.sources.length];
-        pool.nextIndex += 1;
+        const index = pool.nextIndex % pool.sources.length;
+        const audio = pool.sources[index];
+        pool.nextIndex = (pool.nextIndex + 1) % pool.sources.length;
 
         if (!audio) {
             return;

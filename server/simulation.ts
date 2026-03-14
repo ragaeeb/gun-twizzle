@@ -591,7 +591,11 @@ export const createServerSimulation = (levelDef: LevelDef, room: Room): ServerSi
             const damageEvents: DamageEvent[] = [];
             for (const event of outEvents) {
                 if (event.type === 'damage') {
-                    damageEvents.push(event);
+                    damageEvents.push({
+                        ...event,
+                        hitNormal: { ...event.hitNormal },
+                        hitPoint: { ...event.hitPoint },
+                    });
                 }
             }
 
@@ -603,7 +607,8 @@ export const createServerSimulation = (levelDef: LevelDef, room: Room): ServerSi
 
             statusEffectSystem(world, dt);
             applyShieldRegen(world, dt);
-            missionSystem(missionState, outEvents, outEvents, dt);
+            const missionInputEvents = outEvents.slice();
+            missionSystem(missionState, missionInputEvents, outEvents, dt);
 
             swapEventBuffers(eventQueue);
         },

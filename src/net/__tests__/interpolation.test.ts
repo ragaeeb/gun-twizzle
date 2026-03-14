@@ -129,5 +129,9 @@ describe('lerpTransform', () => {
 
         const result = lerpTransform(a, b, 0.5);
         expect(result.position).toEqual([5, 10, 15]);
+        expect(result.rotation[0]).toBeCloseTo(1, 5);
+        expect(result.rotation[1]).toBeCloseTo(0, 5);
+        expect(result.rotation[2]).toBeCloseTo(0, 5);
+        expect(result.rotation[3]).toBeCloseTo(0, 5);
     });
 });

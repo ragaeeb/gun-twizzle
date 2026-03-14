@@ -15,11 +15,68 @@ const waitForLoadingDismissed = async (page: Page) => {
     );
 };
 
+const waitForFrames = async (page: Page, frameCount = 2) => {
+    await page.evaluate(
+        (frames) =>
+            new Promise((resolve) => {
+                let remaining = frames;
+                const step = () => {
+                    remaining -= 1;
+                    if (remaining <= 0) {
+                        resolve(null);
+                        return;
+                    }
+                    requestAnimationFrame(step);
+                };
+                requestAnimationFrame(step);
+            }),
+        frameCount,
+    );
+};
+
+const waitForRendererInfoStable = async (page: Page, stableForMs = 1000) => {
+    await page.waitForFunction(
+        ({ stableForMs }) => {
+            // biome-ignore lint/suspicious/noExplicitAny: E2E window accessor
+            const infoFn = (window as any).__THREE_RENDERER_INFO__;
+            if (typeof infoFn !== 'function') {
+                return false;
+            }
+            const info = infoFn();
+            if (!info) {
+                return false;
+            }
+            const now = performance.now();
+            const key = '__gtRendererStable__';
+            const state =
+                // biome-ignore lint/suspicious/noExplicitAny: E2E window accessor
+                (window as any)[key] ?? { last: info, lastChange: now };
+            const changed =
+                info.geometries !== state.last.geometries ||
+                info.textures !== state.last.textures ||
+                info.programs !== state.last.programs;
+            if (changed) {
+                state.last = info;
+                state.lastChange = now;
+                // biome-ignore lint/suspicious/noExplicitAny: E2E window accessor
+                (window as any)[key] = state;
+                return false;
+            }
+            // biome-ignore lint/suspicious/noExplicitAny: E2E window accessor
+            (window as any)[key] = state;
+            return now - state.lastChange >= stableForMs;
+        },
+        { timeout: 20_000 },
+        { stableForMs },
+    );
+};
+
 const selectLevel = async (page: Page, levelName: string) => {
     const card = page.locator('.level-select-card', { hasText: levelName });
+    await expect(card).toBeVisible({ timeout: 10_000 });
     await card.click();
     await waitForLoadingDismissed(page);
-    await page.waitForTimeout(3_000);
+    await waitForFrames(page, 2);
 };
 
 const waitForGame = async (page: Page) => {
@@ -58,15 +115,17 @@ test.describe('GPU Resource Leaks', () => {
 
         const canvas = page.locator('canvas').first();
         await canvas.click({ force: true });
-        await page.waitForTimeout(500);
+        await page.waitForFunction(
+            () => document.activeElement?.tagName === 'CANVAS' || document.pointerLockElement?.tagName === 'CANVAS',
+        );
 
         await page.keyboard.down('KeyW');
         for (let i = 0; i < 20; i++) {
             await page.mouse.click(640, 360);
-            await page.waitForTimeout(200);
+            await waitForFrames(page, 2);
         }
         await page.keyboard.up('KeyW');
-        await page.waitForTimeout(10_000);
+        await waitForRendererInfoStable(page);
 
         const after = await getRendererInfo(page);
 
@@ -92,12 +151,11 @@ test.describe('GPU Resource Leaks', () => {
 
         // Return to menu via Escape → menu button
         await page.keyboard.press('Escape');
-        await page.waitForTimeout(500);
 
         const menuBtn = page.locator('button', { hasText: /menu|back|return/i });
         await expect(menuBtn.first(), 'Expected a menu/back/return button after pressing Escape').toBeVisible();
         await menuBtn.first().click();
-        await page.waitForTimeout(2_000);
+        await expect(page.locator('.level-select-card').first()).toBeVisible({ timeout: 10_000 });
 
         // Load Level 2
         await selectLevel(page, LEVEL_2);

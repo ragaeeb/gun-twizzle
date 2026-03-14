@@ -14,14 +14,15 @@ export type EnemyDef = {
     speed: number;
 };
 
-export const ENEMY_REGISTRY = {
+type EnemyDefInput = Omit<EnemyDef, 'id'>;
+
+const ENEMY_DEFS = {
     grunt: {
         attackDamage: 12,
         attackRange: 20,
         attackRateHz: 1.5,
         detectionRange: 25,
         health: 80,
-        id: 'grunt',
         isDormant: false,
         modelPath: '',
         name: 'Security Grunt',
@@ -36,7 +37,6 @@ export const ENEMY_REGISTRY = {
         attackRateHz: 0.8,
         detectionRange: 18,
         health: 200,
-        id: 'heavy',
         isDormant: false,
         modelPath: '',
         name: 'Heavy Enforcer',
@@ -51,7 +51,6 @@ export const ENEMY_REGISTRY = {
         attackRateHz: 0.5,
         detectionRange: 60,
         health: 60,
-        id: 'sniper',
         isDormant: false,
         modelPath: '',
         name: 'Sharpshooter',
@@ -66,7 +65,6 @@ export const ENEMY_REGISTRY = {
         attackRateHz: 0,
         detectionRange: 0,
         health: 90,
-        id: 'trainingDummy',
         isDormant: true,
         modelPath: '',
         name: 'Training Dummy',
@@ -75,7 +73,11 @@ export const ENEMY_REGISTRY = {
         scoreValue: 25,
         speed: 0,
     },
-} as const satisfies Record<string, EnemyDef>;
+} as const satisfies Record<string, EnemyDefInput>;
 
-export type EnemyId = keyof typeof ENEMY_REGISTRY;
+export const ENEMY_REGISTRY = Object.fromEntries(
+    Object.entries(ENEMY_DEFS).map(([key, def]) => [key, { ...def, id: key }]),
+) as Record<keyof typeof ENEMY_DEFS, EnemyDef>;
+
+export type EnemyId = keyof typeof ENEMY_DEFS;
 export type EnemyRegistry = typeof ENEMY_REGISTRY;

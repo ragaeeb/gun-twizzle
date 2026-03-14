@@ -26,6 +26,21 @@ export type CharacterControllerHandle = {
     rigidBody: Rapier.RigidBody;
 };
 
+type RapierAdapter = {
+    ColliderDesc: {
+        capsule: (halfHeight: number, radius: number) => Rapier.ColliderDesc;
+    };
+    RigidBodyDesc: {
+        kinematicPositionBased: () => Rapier.RigidBodyDesc;
+    };
+};
+
+type PhysicsWorld = {
+    createCharacterController: (offset: number) => Rapier.KinematicCharacterController;
+    createRigidBody: (desc: Rapier.RigidBodyDesc) => Rapier.RigidBody;
+    createCollider: (desc: Rapier.ColliderDesc, rigidBody: Rapier.RigidBody) => Rapier.Collider;
+};
+
 /**
  * Create a Rapier KinematicCharacterController with a capsule collider.
  *
@@ -33,13 +48,16 @@ export type CharacterControllerHandle = {
  * and wall sliding automatically via `computeColliderMovement`.
  */
 export const createCharacterController = (
-    // biome-ignore lint/suspicious/noExplicitAny: dual-package rapier type workaround
-    rapier: any,
-    // biome-ignore lint/suspicious/noExplicitAny: dual-package rapier type workaround
-    world: any,
+    rapier: RapierAdapter,
+    world: PhysicsWorld,
     config: CharacterControllerConfig,
     startPosition: { x: number; y: number; z: number },
 ): CharacterControllerHandle => {
+    const halfHeight = config.height / 2 - config.radius;
+    if (!Number.isFinite(config.height) || !Number.isFinite(config.radius) || config.radius <= 0 || halfHeight <= 0) {
+        throw new Error(`Invalid character controller dimensions: height=${config.height}, radius=${config.radius}`);
+    }
+
     const controller = world.createCharacterController(0.01);
     const slopeRadians = (config.maxSlopeAngleDeg * Math.PI) / 180;
     controller.setMaxSlopeClimbAngle(slopeRadians);
@@ -55,10 +73,6 @@ export const createCharacterController = (
     );
     const rigidBody = world.createRigidBody(rigidBodyDesc);
 
-    const halfHeight = config.height / 2 - config.radius;
-    if (config.radius <= 0 || halfHeight <= 0) {
-        throw new Error(`Invalid character controller dimensions: height=${config.height}, radius=${config.radius}`);
-    }
     const colliderDesc = rapier.ColliderDesc.capsule(halfHeight, config.radius).setCollisionGroups(PLAYER_GROUP);
     const collider = world.createCollider(colliderDesc, rigidBody);
 

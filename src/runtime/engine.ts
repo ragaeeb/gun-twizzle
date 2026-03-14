@@ -353,6 +353,15 @@ export class GameEngine {
             return;
         }
 
+        if (this.playerEntityId !== null) {
+            const health = this.world.health.get(this.playerEntityId);
+            if (health && health.current <= 0) {
+                this.input.setEnabled(false);
+                return;
+            }
+            this.input.setEnabled(true);
+        }
+
         // Apply pending server snapshot before running local ticks (reconciliation)
         if (this.netSession) {
             this.applyPendingSnapshot();
@@ -695,7 +704,16 @@ export class GameEngine {
         }
 
         if (event.pickupId === 'ammo') {
-            this.player.addAmmo(this.player.getCurrentWeaponId(), AMMO_RESTORE);
+            const weaponId = this.player.getCurrentWeaponId();
+            this.player.addAmmo(weaponId, AMMO_RESTORE);
+            if (this.playerEntityId !== null) {
+                const weaponOwner = this.world.weaponOwner.get(this.playerEntityId);
+                const weaponKey = weaponId.toLowerCase();
+                const ammoData = weaponOwner?.ammo[weaponKey];
+                if (ammoData) {
+                    ammoData.reserve = this.player.getCurrentWeaponState()?.totalAmmo ?? ammoData.reserve;
+                }
+            }
         }
     }
 

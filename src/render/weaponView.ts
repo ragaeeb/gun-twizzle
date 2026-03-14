@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-
+import type { FpsWeaponMesh } from '../assets/gameAssets';
 import { AssetManager, AudioManager } from '../assets/gameAssets';
 import type { WeaponProcessResult, WeaponStateData } from '../runtime/player';
 import type { WeaponId as WeaponIdType } from '../runtime/types';
@@ -8,8 +8,7 @@ import { WeaponRegistry } from '../runtime/weapons';
 import { ShootParticleSystem } from './effects';
 import type { FpsCamera, GameScene } from './scene';
 
-// biome-ignore lint/suspicious/noExplicitAny: AssetManager is @ts-nocheck, these types will be fixed in M2
-export type WeaponMeshInstance = any;
+export type WeaponMeshInstance = FpsWeaponMesh;
 export type ViewModelDebugTransform = {
     position?: [number, number, number];
     rotation?: [number, number, number];
@@ -22,8 +21,7 @@ export class WeaponView {
     private currentWeaponMesh: WeaponMeshInstance | null = null;
     private currentWeaponId: WeaponIdType | null = null;
     private weaponHolder = new THREE.Group();
-    // biome-ignore lint/suspicious/noExplicitAny: ShootParticleSystem is @ts-nocheck
-    private shootParticle: any;
+    private shootParticle: ShootParticleSystem;
     private readonly bobSpeed = 10;
     private readonly bobAmount = 0.01;
     private readonly swayAmount = 0.001;
@@ -76,7 +74,9 @@ export class WeaponView {
         }
 
         if (this.currentWeaponMesh) {
-            this.weaponHolder.remove(this.currentWeaponMesh.mesh);
+            if (this.currentWeaponMesh.mesh) {
+                this.weaponHolder.remove(this.currentWeaponMesh.mesh);
+            }
             AssetManager.returnWeaponToPool(this.currentWeaponMesh);
             this.currentWeaponMesh = null;
             this.currentWeaponId = null;
@@ -196,7 +196,7 @@ export class WeaponView {
             this.camera.shake(1.4, 400);
         }
 
-        if (definition?.shootSoundKey && this.currentWeaponMesh.isClipBasedAnimation()) {
+        if (definition?.shootSoundKey && this.currentWeaponMesh?.isClipBasedAnimation()) {
             AudioManager.playSFX(definition.shootSoundKey, 1, false);
         }
 

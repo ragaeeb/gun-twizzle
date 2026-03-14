@@ -2,7 +2,7 @@
 // Runs on `bun run build:prod` or in CI.
 // Dev builds use raw uncompressed assets for fast iteration.
 
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -38,7 +38,7 @@ if (hasGltfTransform) {
                 console.log(`Optimizing ${filePath}...`);
 
                 try {
-                    execSync(`bunx gltf-transform optimize "${filePath}" "${filePath}" --compress meshopt`, {
+                    execFileSync('bunx', ['gltf-transform', 'optimize', filePath, filePath, '--compress', 'meshopt'], {
                         stdio: 'pipe',
                     });
                     const after = statSync(filePath).size;
@@ -51,8 +51,13 @@ if (hasGltfTransform) {
                     console.warn(`  Failed to optimize ${filePath}: ${message}`);
                 }
             }
-        } catch {
-            console.warn(`Directory ${dir} not found, skipping.`);
+        } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if (code === 'ENOENT') {
+                console.warn(`Directory ${dir} not found, skipping.`);
+                continue;
+            }
+            throw error;
         }
     }
 }

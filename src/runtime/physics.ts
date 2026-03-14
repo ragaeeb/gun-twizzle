@@ -82,7 +82,10 @@ export class PhysicsSystem {
             .lockRotations();
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
-        const colliderDesc = this.rapier.ColliderDesc.capsule(halfHeight, radius).setFriction(0).setRestitution(0);
+        const colliderDesc = this.rapier.ColliderDesc.capsule(halfHeight, radius)
+            .setFriction(0)
+            .setRestitution(0)
+            .setCollisionGroups(PLAYER_GROUP);
 
         this.world.createCollider(colliderDesc, rigidBody);
         return rigidBody;
@@ -177,6 +180,7 @@ export class PhysicsSystem {
             return null;
         }
 
+        let rigidBody: RapierRigidBody | null = null;
         try {
             root.scale.copy(scale);
             root.updateMatrixWorld(true);
@@ -185,7 +189,7 @@ export class PhysicsSystem {
             rigidBodyDesc.setTranslation(position.x, position.y, position.z);
             const bodyOrigin = new THREE.Vector3(position.x, position.y, position.z);
 
-            const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+            rigidBody = this.world.createRigidBody(rigidBodyDesc);
             const meshes = AssetManager.extractMeshes(root);
 
             for (const mesh of meshes) {
@@ -223,7 +227,11 @@ export class PhysicsSystem {
 
             this.addMesh(root, rigidBody);
             return rigidBody;
-        } catch {
+        } catch (error) {
+            if (rigidBody) {
+                this.world.removeRigidBody(rigidBody);
+            }
+            console.error('Failed to create trimesh collider', error);
             return null;
         }
     }

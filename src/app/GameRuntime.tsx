@@ -217,7 +217,7 @@ export const GameRuntime = ({
 
             const nextPlayers = engine.getRemotePlayers();
             setRemotePlayers((prev) => (areRemotePlayersEqual(prev, nextPlayers) ? prev : nextPlayers));
-        }, 50);
+        }, 125);
 
         return () => {
             window.clearInterval(interval);

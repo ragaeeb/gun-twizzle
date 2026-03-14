@@ -21,7 +21,7 @@ describe('WeaponRegistry', () => {
 
     it('all weapons have a type', () => {
         for (const [id, def] of Object.entries(WEAPON_REGISTRY)) {
-            expect(['hitscan', 'melee'], `${id} type`).toContain(def.type);
+            expect(def.type, `${id} type`).toMatch(/^(hitscan|melee)$/);
         }
     });
 

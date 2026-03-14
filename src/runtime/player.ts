@@ -136,7 +136,9 @@ class WeaponLogicSystem {
         this.processShootAndReload(input, state, definition, nowMs, player, result);
         this.processWeaponSwitch(input, nowMs, result);
 
-        result.weaponState = cloneWeaponState(state);
+        const finalState = this.getCurrentWeaponState();
+        result.weaponId = this.currentWeaponId;
+        result.weaponState = finalState ? cloneWeaponState(finalState) : null;
         return result;
     }
 

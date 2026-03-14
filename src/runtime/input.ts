@@ -37,6 +37,7 @@ export class InputController {
     private keyReleases: KeyState;
     private mouseButtons = new Map<number, boolean>();
     private mouseMovement = { x: 0, y: 0 };
+    private enabled = true;
     isPointerLocked = false;
 
     constructor(domElement: HTMLCanvasElement, camera: FpsCamera) {
@@ -83,10 +84,16 @@ export class InputController {
     }
 
     private onKeyDown(event: KeyboardEvent) {
+        if (!this.enabled) {
+            return;
+        }
         this.applyKeyEvent(event.code, true);
     }
 
     private onKeyUp(event: KeyboardEvent) {
+        if (!this.enabled) {
+            return;
+        }
         this.applyKeyEvent(event.code, false);
     }
 
@@ -139,6 +146,9 @@ export class InputController {
     }
 
     private onMouseMove(event: MouseEvent) {
+        if (!this.enabled) {
+            return;
+        }
         if (!this.isPointerLocked) {
             return;
         }
@@ -149,10 +159,16 @@ export class InputController {
     }
 
     private onMouseDown(event: MouseEvent) {
+        if (!this.enabled) {
+            return;
+        }
         this.mouseButtons.set(event.button, true);
     }
 
     private onMouseUp(event: MouseEvent) {
+        if (!this.enabled) {
+            return;
+        }
         this.mouseButtons.set(event.button, false);
     }
 
@@ -169,6 +185,9 @@ export class InputController {
     }
 
     updateKeyEvents() {
+        if (!this.enabled) {
+            return;
+        }
         const keys: Array<keyof KeyState> = [
             'forward',
             'backward',
@@ -192,9 +211,22 @@ export class InputController {
     }
 
     getMouseMovement(): { x: number; y: number } {
+        if (!this.enabled) {
+            return { x: 0, y: 0 };
+        }
         const movement = { ...this.mouseMovement };
         this.mouseMovement = { x: 0, y: 0 };
         return movement;
+    }
+
+    setEnabled(enabled: boolean) {
+        if (this.enabled === enabled) {
+            return;
+        }
+        this.enabled = enabled;
+        if (!enabled) {
+            this.resetInputState();
+        }
     }
 
     private resetInputState() {

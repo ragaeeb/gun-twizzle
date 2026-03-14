@@ -3,7 +3,7 @@
 ![Gun Twizzle icon](./icon.png)
 
 ![Bun](https://img.shields.io/badge/bun-1.3.10-14151A?logo=bun&logoColor=white)
-![Vite](https://img.shields.io/badge/vite-7.x-646CFF?logo=vite&logoColor=white)
+![Vite](https://img.shields.io/badge/vite-8.x-646CFF?logo=vite&logoColor=white)
 ![React](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=black)
 ![Three.js](https://img.shields.io/badge/three.js-0.183-000000?logo=three.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/typescript-5.9-3178C6?logo=typescript&logoColor=white)

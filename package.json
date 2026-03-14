@@ -60,7 +60,7 @@
         "build:prod": "bun scripts/optimize-assets.ts && tsc --noEmit && vite build && bun scripts/check-budgets.ts",
         "dev": "vite",
         "dev:server": "bun run server/main.ts",
-        "format": "biome format . --write",
+        "format": "biome check . --write --unsafe",
         "lint": "biome check . --error-on-warnings",
         "preview": "vite preview",
         "test": "vitest run",

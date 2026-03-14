@@ -56,7 +56,7 @@ export const WEAPON_REGISTRY: Record<string, WeaponDef> = {
         fireRateHz: 2,
         headshotMultiplier: 1.0,
         id: 'knife',
-        magazineSize: 1,
+        magazineSize: 0,
         modelPath: AssetRegistry.weapons.knife.model,
         name: 'Knife',
         range: 2.5,

@@ -47,8 +47,9 @@ const isInRange = (
     pickupPos: { x: number; y: number; z: number },
 ): boolean => {
     const dx = playerPos.x - pickupPos.x;
+    const dy = playerPos.y - pickupPos.y;
     const dz = playerPos.z - pickupPos.z;
-    return dx * dx + dz * dz <= PICKUP_COLLECT_RADIUS_SQ;
+    return dx * dx + dy * dy + dz * dz <= PICKUP_COLLECT_RADIUS_SQ;
 };
 
 const tryRespawn = (pickup: PickupComponent, simTime: number): boolean => {

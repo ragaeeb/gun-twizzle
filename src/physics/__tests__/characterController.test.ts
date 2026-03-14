@@ -1,5 +1,5 @@
 import type * as Rapier from '@dimforge/rapier3d-compat';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
     type CharacterControllerHandle,
     createCharacterController,
@@ -9,6 +9,7 @@ import {
 import { WORLD_GROUP } from '../collisionLayers';
 
 let rapier: typeof Rapier;
+const worlds: Rapier.World[] = [];
 
 const stepWorld = (world: Rapier.World, steps = 1) => {
     for (let i = 0; i < steps; i += 1) {
@@ -16,7 +17,11 @@ const stepWorld = (world: Rapier.World, steps = 1) => {
     }
 };
 
-const createWorld = () => new rapier.World({ x: 0, y: -9.81, z: 0 });
+const createWorld = () => {
+    const world = new rapier.World({ x: 0, y: -9.81, z: 0 });
+    worlds.push(world);
+    return world;
+};
 
 const createGround = (world: Rapier.World) => {
     const rigidBodyDesc = rapier.RigidBodyDesc.fixed().setTranslation(0, -0.1, 0);
@@ -54,6 +59,12 @@ const settleOnGround = (world: Rapier.World, handle: CharacterControllerHandle) 
 beforeAll(async () => {
     rapier = await import('@dimforge/rapier3d-compat');
     await rapier.init();
+});
+
+afterEach(() => {
+    for (const world of worlds.splice(0)) {
+        world.free();
+    }
 });
 
 describe('CharacterController', () => {

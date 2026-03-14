@@ -77,6 +77,7 @@ const handleJoinMessage = (ws: RoomSocket, msg: ClientJoinMsg) => {
     // Reset the level when first player joins an empty room
     if (room.getPlayers().length === 0) {
         sim.reset();
+        inputRateMap.clear();
     }
 
     const slot = room.join(ws, msg.name);

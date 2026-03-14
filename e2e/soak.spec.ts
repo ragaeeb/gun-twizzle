@@ -62,10 +62,11 @@ test.describe('Sustained Performance', () => {
         // Let the game run for 4 more minutes (240s)
         await page.waitForTimeout(240_000);
 
-        const lateFrameTimes: number[] = await page.evaluate(
+        const allFrameTimes: number[] = await page.evaluate(
             // biome-ignore lint/suspicious/noExplicitAny: E2E window accessor
             () => [...(window as any).__FRAME_TIME_SAMPLES__],
         );
+        const lateFrameTimes = allFrameTimes.slice(earlyFrameTimes.length);
 
         expect(earlyFrameTimes.length, 'Early frame samples missing').toBeGreaterThan(0);
         expect(lateFrameTimes.length, 'Late frame samples missing').toBeGreaterThan(0);
